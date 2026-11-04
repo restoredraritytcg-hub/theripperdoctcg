@@ -1,0 +1,17 @@
+{
+  "name": "RipperDoc Intake",
+  "short_name": "RipperDoc",
+  "start_url": "intake.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "intake-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="intake.webmanifest">
+<link rel="apple-touch-icon" href="intake-icon.png">
+<link rel="icon" type="image/png" href="intake-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="RipperDoc">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<title>Intake</title>
+<script>
+/* =====================================================================
+ *  OWNER INTAKE PAGE — intake-v1 (private: not linked from the site)
+ *  Orders, automatic quotes, your discount, before/after photos and notes.
+ *  Edit only this CONFIG block. The PIN is set in Code.gs (INTAKE_PIN).
+ * ===================================================================== */
+const CONFIG = {
+  business: 'RipperDoc TCG',
+  build: 'rd-intake-v1',
+  endpoint: '',            // TODO: RipperDoc's Apps Script /exec URL (same as the website)
+  cloudinaryCloud: '',     // TODO: same Cloudinary cloud as the website
+  cloudinaryPreset: '',    // TODO: same unsigned preset as the website
+  item: 'card', items: 'cards',
+  theme: { bg: '#f6f8ff', panel: '#ffffff', panel2: '#eef2ff', line: '#d5dcee', text: '#0e1322', muted: '#4b5572',
+           accent: '#1747e6', onAccent: '#ffffff', highlight: '#f2ac00', onHighlight: '#0e0e0e' },
+  fonts: { display: 'Bangers', displayWeights: '400', displayUpper: true, body: 'Nunito', bodyWeights: '400;600;700;800' }
+};
+</script>
+<style>
+:root{
+  --ok:#1e8a46; --ok-soft:color-mix(in srgb, var(--ok) 14%, transparent);
+  --warn:#b26a00; --warn-soft:color-mix(in srgb, #f0a020 18%, transparent);
+  --bad:#c62f26; --bad-soft:color-mix(in srgb, var(--bad) 12%, transparent);
+  --r:10px; --r-sm:6px;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0; background:var(--bg); color:var(--text); font:16px/1.5 var(--f-body); min-height:100vh}
+a{color:var(--accent)}
+:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+h1,h2,h3{font-family:var(--f-display); text-transform:var(--display-case); margin:0; line-height:1.1; letter-spacing:.01em}
+.wrap{max-width:880px; margin:0 auto; padding:0 16px}
+header.top{background:var(--panel); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5}
+header.top .wrap{display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:56px}
+.brand{font-family:var(--f-display); text-transform:var(--display-case); font-size:20px}
+.brand small{font-family:var(--f-body); text-transform:none; color:var(--muted); font-size:14px; margin-left:8px}
+main{padding:22px 0 80px}
+button, input, textarea, select{font:inherit; color:inherit}
+.btn{border:1px solid var(--accent); background:var(--accent); color:var(--on-accent); border-radius:var(--r-sm); padding:10px 16px; font-weight:700; cursor:pointer; min-height:44px}
+.btn.ghost{background:transparent; color:var(--text); border-color:var(--line)}
+.btn.small{min-height:34px; padding:6px 12px; font-size:14px}
+.btn[disabled]{opacity:.55; cursor:not-allowed}
+[hidden]{display:none !important}
+input[type=text], input[type=password], input[type=search], input[type=email], input[type=tel], input[type=date], input[type=number], select, textarea{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; width:100%; min-height:44px}
+textarea{min-height:84px; resize:vertical}
+input:focus, textarea:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
+.muted{color:var(--muted)}
+.err{color:var(--bad)}
+
+/* PIN */
+.pin{max-width:360px; margin:12vh auto 0; display:grid; gap:14px; text-align:center}
+.pin h1{font-size:34px}
+.pin input{font-size:24px; text-align:center; letter-spacing:.3em}
+
+/* list */
+.toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px}
+.toolbar input{flex:1 1 220px}
+.seg{display:inline-flex; border:1px solid var(--line); border-radius:var(--r-sm); overflow:hidden}
+.seg button{border:0; background:transparent; padding:8px 14px; cursor:pointer; min-height:42px}
+.seg button[aria-pressed="true"]{background:var(--accent); color:var(--on-accent); font-weight:700}
+.orders{display:grid; gap:8px}
+.order{display:grid; grid-template-columns:1fr auto; gap:4px 14px; text-align:left; width:100%; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; cursor:pointer}
+.order:hover{border-color:var(--accent)}
+.order .who{font-weight:800}
+.order .ref{font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:13px; color:var(--muted)}
+.order .amt{grid-row:1 / span 2; grid-column:2; align-self:center; text-align:right; font-weight:800; font-size:18px}
+.order .amt small{display:block; font-weight:400; font-size:12px; color:var(--muted)}
+.tags{display:flex; flex-wrap:wrap; gap:6px; grid-column:1}
+.tag{font-size:12px; border-radius:4px; padding:2px 7px; background:var(--panel2); color:var(--muted); white-space:nowrap}
+.tag.warn{background:var(--warn-soft); color:var(--warn); font-weight:700}
+.tag.ok{background:var(--ok-soft); color:var(--ok); font-weight:700}
+.empty{border:1px dashed var(--line); border-radius:var(--r); padding:24px; text-align:center; color:var(--muted)}
+
+/* order */
+.back{margin-bottom:14px}
+.ohead{display:flex; justify-content:space-between; gap:12px; align-items:flex-start; flex-wrap:wrap; margin-bottom:16px}
+.ohead h1{font-size:30px}
+.contact{display:grid; gap:2px; font-size:15px; margin-top:6px}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+.quote{border:2px solid var(--highlight); margin-bottom:18px}
+.quote h2{font-size:20px; margin-bottom:10px}
+.qline{display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--line); font-size:15px}
+.qline .bd{display:block; color:var(--muted); font-size:13px}
+.qline b{white-space:nowrap}
+.qtotal{display:flex; justify-content:space-between; align-items:baseline; margin-top:10px}
+.qtotal .big{font-family:var(--f-display); font-size:34px; color:var(--text)}
+.disc{display:flex; gap:8px; margin-top:12px; flex-wrap:wrap; align-items:center}
+.disc input{width:140px; flex:none}
+.qnotes{margin:12px 0 0; padding:10px 12px 10px 28px; background:var(--warn-soft); border-radius:var(--r-sm); color:var(--text); font-size:14px}
+.card{margin-bottom:14px}
+.card .chead{display:flex; justify-content:space-between; gap:12px; align-items:flex-start}
+.card h3{font-size:20px}
+.facts{display:grid; grid-template-columns:max-content 1fr; gap:3px 12px; margin:10px 0; font-size:15px}
+.facts dt{color:var(--muted)}
+.facts dd{margin:0; white-space:pre-wrap; overflow-wrap:anywhere}
+.ph{margin-top:14px}
+.ph > b{display:block; font-size:14px; margin-bottom:6px}
+.strip{display:flex; flex-wrap:wrap; gap:8px; align-items:flex-start}
+.thumb{position:relative; width:86px}
+.thumb a{display:block}
+.thumb img{width:86px; height:114px; object-fit:cover; border-radius:5px; border:1px solid var(--line); background:var(--panel2); display:block}
+.thumb span{display:block; font-size:12px; color:var(--muted); text-align:center}
+.thumb .x{position:absolute; top:-7px; right:-7px; width:26px; height:26px; border-radius:50%; border:1px solid var(--line); background:var(--panel); color:var(--bad); font-weight:800; cursor:pointer; line-height:1}
+.add{width:86px; height:114px; border:2px dashed var(--line); border-radius:5px; display:grid; place-items:center; text-align:center; font-size:13px; color:var(--muted); cursor:pointer; background:var(--panel2); padding:4px}
+.add:hover{border-color:var(--accent); color:var(--accent)}
+.add.busy{opacity:.6; cursor:progress}
+.row2{display:grid; grid-template-columns:1fr 200px; gap:14px; margin-top:14px}
+@media (max-width:620px){ .row2{grid-template-columns:1fr} }
+.saved{font-size:13px; color:var(--ok); margin-left:8px}
+.status{font-size:12px; font-weight:800; border-radius:4px; padding:3px 8px; background:var(--panel2); color:var(--text); white-space:nowrap}
+.status.done{background:var(--ok-soft); color:var(--ok)}
+.status.cancel{background:var(--bad-soft); color:var(--bad)}
+.toast{position:fixed; left:50%; bottom:18px; transform:translateX(-50%); background:var(--text); color:var(--bg); padding:11px 16px; border-radius:var(--r-sm); font-weight:700; z-index:9; max-width:calc(100% - 32px)}
+.toast[hidden]{display:none}
+footer{color:var(--muted); font-size:12px; text-align:center; padding:20px}
+
+nav.tabs{display:flex; gap:4px; overflow-x:auto}
+nav.tabs a{padding:8px 12px; border-radius:var(--r-sm); text-decoration:none; color:var(--muted); font-weight:700; white-space:nowrap}
+nav.tabs a[aria-current="page"]{background:var(--panel2); color:var(--text)}
+header.top .wrap{flex-wrap:wrap}
+.cust{display:grid; grid-template-columns:1fr auto; gap:4px 14px; text-align:left; width:100%; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; cursor:pointer; text-decoration:none; color:inherit}
+.cust:hover{border-color:var(--accent)}
+.cust .who{font-weight:800}
+.cust .amt{grid-row:1 / span 2; grid-column:2; align-self:center; text-align:right; font-weight:800; font-size:18px}
+.cust .amt small{display:block; font-weight:400; font-size:12px; color:var(--muted)}
+.stats{display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin:14px 0 18px}
+.stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:12px}
+.stat b{display:block; font-family:var(--f-display); font-size:26px}
+.stat span{color:var(--muted); font-size:13px}
+.chips{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px}
+.chips button{border:1px solid var(--line); background:var(--panel); border-radius:999px; padding:6px 12px; cursor:pointer; font-size:14px}
+.chips button[aria-pressed="true"]{background:var(--accent); color:var(--on-accent); border-color:var(--accent); font-weight:700}
+.crd{display:grid; grid-template-columns:54px 1fr auto; gap:12px; align-items:center; background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:10px 12px; text-decoration:none; color:inherit}
+.crd:hover{border-color:var(--accent)}
+.crd img, .crd .noimg{width:54px; height:72px; object-fit:cover; border-radius:4px; background:var(--panel2); border:1px solid var(--line)}
+.crd .t{font-weight:800}
+.crd .s{display:block; color:var(--muted); font-size:13px}
+.crd .r{text-align:right; font-size:14px}
+h2.sec{font-size:20px; margin:22px 0 10px}
+
+.ed{margin-bottom:14px; display:grid; gap:12px}
+.ed h2{font-size:20px}
+.edhead{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap}
+label.f, div.f{display:grid; gap:6px; font-weight:700; font-size:15px}
+label.f input, label.f textarea, .lp select, .lp input, .ed select{font-weight:400}
+.lp{display:grid; gap:8px}
+.lp select, .ed select{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; min-height:44px; width:100%}
+.g2{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+@media (max-width:620px){ .g2{grid-template-columns:1fr} }
+.sw{display:flex; align-items:center; gap:10px; cursor:pointer; font-weight:700}
+.sw input{appearance:none; -webkit-appearance:none; width:46px; height:28px; border-radius:999px; background:var(--line); position:relative; cursor:pointer; flex:none; transition:background .15s; margin:0}
+.sw input::after{content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:transform .15s}
+.sw input:not(:checked){box-shadow:inset 0 0 0 1px var(--muted)}
+.sw input:checked{background:var(--accent)}
+.sw input:checked::after{transform:translateX(18px)}
+.sw.compact{font-weight:400; font-size:14px; color:var(--muted)}
+.savebar{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top:4px}
+.seclist{list-style:none; margin:0; padding:0}
+.seclist li{display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); flex-wrap:wrap}
+.seclist li:last-child{border-bottom:0}
+.seclist .nm{font-weight:700}
+.seclist .ctl{display:flex; gap:6px; align-items:center}
+.ptab{width:100%; border-collapse:collapse}
+.ptab th{text-align:left; font-size:13px; color:var(--muted); padding:6px; border-bottom:1px solid var(--line)}
+.ptab td{padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:middle}
+.ptab tr.grp td{font-family:var(--f-display); text-transform:var(--display-case); font-size:16px; padding-top:16px}
+.ptab tr.chg td{background:color-mix(in srgb, var(--accent) 12%, transparent)}
+.ptab input{min-height:40px; padding:6px 8px}
+.dollar{display:flex; align-items:center; gap:4px; max-width:120px}
+.tablewrap{overflow-x:auto}
+.elist{display:grid; gap:8px}
+.eitem{display:flex; justify-content:space-between; gap:12px; align-items:flex-start; border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; flex-wrap:wrap}
+.eitem.dim{opacity:.6}
+.einfo{display:grid; gap:2px; min-width:0; flex:1 1 220px}
+.einfo .muted{font-size:14px}
+.clamp{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden}
+.ectl{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.del[data-armed="1"]{color:var(--bad); border-color:var(--bad)}
+.eform{display:grid; gap:12px; width:100%; padding:14px; border:1px solid var(--accent); border-radius:var(--r-sm); background:var(--panel2); margin:6px 0}
+.ggrid{display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:12px}
+.gitem{margin:0; border:1px solid var(--line); border-radius:var(--r-sm); padding:8px; display:grid; gap:6px; align-content:start}
+.gitem.dim img{opacity:.45}
+.gitem img{width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:4px; background:var(--panel2)}
+.gitem figcaption{display:grid; font-size:14px}
+.gctl{display:flex; gap:6px; align-items:center; flex-wrap:wrap}
+.qlist{display:grid; gap:10px}
+.qrow{display:grid; grid-template-columns:60px 1fr; gap:10px; align-items:start}
+.qimg{width:60px; height:80px; object-fit:cover; border-radius:4px; background:var(--panel); display:grid; place-items:center; border:1px solid var(--line)}
+.qf{display:grid; gap:6px}
+.sitehead{margin-bottom:10px}
+.stctl{display:grid; gap:8px; justify-items:end}
+.stctl select{background:var(--panel); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 10px; min-height:40px; font-weight:700; max-width:230px}
+.stctl select:focus{border-color:var(--accent); outline:none; box-shadow:0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent)}
+.stconfirm{display:grid; gap:8px; width:min(100%, 420px); padding:12px; border:1px solid var(--accent); border-radius:var(--r-sm); background:var(--panel2); justify-items:stretch}
+.stconfirm[hidden]{display:none}
+.stconfirm label{font-size:14px; font-weight:700}
+.stconfirm textarea{min-height:64px; font-weight:400}
+.stconfirm .btns{display:flex; gap:8px; flex-wrap:wrap}
+.clist{margin-bottom:18px}
+.clist h2{font-size:20px; margin-bottom:6px}
+.crow{display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:1px solid var(--line)}
+.crow:last-child{border-bottom:0}
+.crow a{font-weight:800; text-decoration:none}
+.crow a:hover{text-decoration:underline}
+.crow .sub{display:block; color:var(--muted); font-size:13px}
+@media (max-width:620px){ .crow{flex-direction:column} .stctl{justify-items:stretch; width:100%} .stctl select{max-width:none} }
+.openlink{font-size:14px; margin-left:8px; font-family:var(--f-body); text-transform:none}
+
+</style>
+</head>
+<body>
+<header class="top"><div class="wrap"><span class="brand" id="brand"></span><span id="hdr"></span></div></header>
+<main><div class="wrap" id="app"></div></main>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<footer id="foot"></footer>
+<script>
+(function(){
+'use strict';
+const C = CONFIG, T = C.theme, F = C.fonts;
+const r = document.documentElement.style;
+[['--bg',T.bg],['--panel',T.panel],['--panel2',T.panel2],['--line',T.line],['--text',T.text],['--muted',T.muted],['--accent',T.accent],['--on-accent',T.onAccent],
+ ['--highlight',T.highlight || T.accent],['--f-display',`'${F.display}', system-ui, sans-serif`],['--f-body',`'${F.body}', system-ui, -apple-system, 'Segoe UI', sans-serif`],
+ ['--display-case', F.displayUpper ? 'uppercase' : 'none']].forEach(([k, v]) => r.setProperty(k, v));
+const fam = (n, w) => 'family=' + n.replace(/ /g, '+') + (w ? ':wght@' + w : '');
+const fl = document.createElement('link'); fl.rel = 'stylesheet';
+fl.href = 'https://fonts.googleapis.com/css2?' + [fam(F.display, F.displayWeights)].concat(F.body !== F.display ? [fam(F.body, F.bodyWeights)] : []).join('&') + '&display=swap';
+document.head.appendChild(fl);
+
+const $ = (s, el) => (el || document).querySelector(s), $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const app = $('#app'), cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+document.title = 'Intake — ' + C.business;
+$('#brand').innerHTML = esc(C.business) + '<small>Intake</small>';
+$('#foot').textContent = C.build;
+const money = n => n == null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
+const thumb = u => /res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u) ? u.replace('/image/upload/', '/image/upload/f_auto,q_auto,c_fill,w_200,h_266/') : u;
+function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3000); }
+
+let PIN = ''; try { PIN = sessionStorage.getItem('intake-pin') || localStorage.getItem('intake-pin-keep') || ''; } catch (_) {}
+async function api(body){
+  if (!C.endpoint) throw new Error('This page isn’t connected yet — set endpoint in CONFIG.');
+  let d;
+  try {
+    const ctl = window.AbortController ? new AbortController() : null, t = ctl && setTimeout(() => ctl.abort(), 45000);
+    const res = await fetch(C.endpoint, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(Object.assign({ type: 'intake', pin: PIN }, body)), signal: ctl ? ctl.signal : undefined });
+    if (t) clearTimeout(t);
+    d = await res.json();
+  } catch (err) { throw new Error('Couldn’t reach your backend — check your connection and try again.'); }
+  if (d && d.badPin) { PIN = ''; try { sessionStorage.removeItem('intake-pin'); localStorage.removeItem('intake-pin-keep'); } catch (_) {} showPin(d.error); throw new Error(d.error); }
+  if (!d || !d.success) throw new Error(String((d && d.error) || 'Something went wrong — try again.').replace(/^Error:\s*/, ''));
+  return d;
+}
+
+/* ---------- PIN ---------- */
+function showPin(msg){
+  $('#hdr').innerHTML = ''; const nav = $('#tabs'); if (nav) nav.remove();
+  app.innerHTML = `<form class="pin" id="pinf" autocomplete="on"><h1>${esc(C.business)}</h1><p class="muted">Enter your intake PIN</p>` +
+    `<input type="password" id="pin" name="pin" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false" enterkeyhint="go" aria-label="PIN" required>` +
+    `<div style="display:flex;gap:18px;justify-content:center;flex-wrap:wrap"><label class="muted" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="showpin"> Show PIN</label>` +
+    `<label class="muted" style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" id="keeppin"> Remember me on this phone</label></div>` +
+    `<button class="btn" type="submit" id="pingo">Open</button><p class="err" id="pinmsg" role="alert">${esc(msg || '')}</p></form>`;
+  $('#showpin').onchange = () => { $('#pin').type = $('#showpin').checked ? 'text' : 'password'; };
+  $('#pin').focus();
+  $('#pinf').addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('#pingo'), out = $('#pinmsg');
+    PIN = $('#pin').value.trim(); out.textContent = '';
+    if (!PIN) { out.textContent = 'Type your PIN.'; return; }
+    btn.disabled = true; btn.textContent = 'Checking…';
+    const slow = setTimeout(() => { if ($('#pinmsg') === out) out.textContent = 'Still checking — the first load can take a few seconds…'; out.className = 'muted'; }, 5000);
+    try { const d = await api({ action: 'list' }); try { sessionStorage.setItem('intake-pin', PIN); if ($('#keeppin') && $('#keeppin').checked) localStorage.setItem('intake-pin-keep', PIN); } catch (_) {} LIST = d; clearTimeout(slow); route(); }
+    catch (err) { clearTimeout(slow); const m = $('#pinmsg'); if (m) { m.className = 'err'; m.textContent = err.message; } const b = $('#pingo'); if (b) { b.disabled = false; b.textContent = 'Open'; } }
+  });
+}
+
+/* ---------- list ---------- */
+let LIST = null, filt = 'open', q = '';
+function isOpen(o){ return !(LIST.doneStages || []).includes(o.status); }
+async function loadList(){
+  app.innerHTML = '<p class="muted">Loading orders…</p>';
+  try { LIST = await api({ action: 'list' }); renderList(); } catch (err) { if (PIN) app.innerHTML = `<p class="err">${esc(err.message)}</p>`; }
+}
+function renderList(){
+  hdrRefresh(loadList);
+  const all = LIST.orders, shown = all.filter(o => (filt === 'all' || isOpen(o)) && (!q || (o.ref + ' ' + o.name).toLowerCase().includes(q)));
+  app.innerHTML = `<div class="toolbar"><input type="search" id="q" placeholder="Search name or reference" value="${esc(q)}" aria-label="Search orders"><a class="btn small" href="#new" style="text-decoration:none">New submission</a>` +
+    `<div class="seg" role="group" aria-label="Show"><button data-f="open" aria-pressed="${filt === 'open'}">Open (${all.filter(isOpen).length})</button><button data-f="all" aria-pressed="${filt === 'all'}">All (${all.length})</button></div></div>` +
+    `<div class="orders">${shown.length ? shown.map(o => {
+      const n = o.count || 0;
+      return `<button class="order" data-id="${esc(o.id)}"><span class="who">${esc(o.name || 'No name')}</span>` +
+        `<span class="amt">${money(o.total)}<small>quote</small></span>` +
+        `<span class="tags"><span class="tag">${esc(o.ref)}</span><span class="tag">${esc(when(o.at))}</span><span class="tag">${n} ${n === 1 ? esc(C.item) : esc(C.items)}</span>` +
+        `<span class="tag">${esc(o.status)}</span>${o.photos.before >= n && n ? '<span class="tag ok">Before photos done</span>' : `<span class="tag">Before ${o.photos.before}/${n}</span>`}` +
+        `${o.photos.after >= n && n ? '<span class="tag ok">After photos done</span>' : `<span class="tag">After ${o.photos.after}/${n}</span>`}${o.flagged ? '<span class="tag warn">Quote needs a look</span>' : ''}</span></button>`;
+    }).join('') : `<div class="empty">${q ? 'No orders match that search.' : filt === 'open' ? 'No open orders.' : 'No orders yet.'}</div>`}</div>`;
+  const qi = $('#q'); qi.addEventListener('input', () => { q = qi.value.trim().toLowerCase(); const pos = qi.selectionStart; renderList(); const n2 = $('#q'); n2.focus(); n2.setSelectionRange(pos, pos); });
+  $$('[data-f]').forEach(b => b.onclick = () => { filt = b.dataset.f; renderList(); });
+  $$('.order').forEach(b => b.onclick = () => { location.hash = '#' + encodeURIComponent(b.dataset.id); });
+}
+
+/* ---------- order ---------- */
+let O = null, STAGES = [], STAGE_EMAILS = {}, VIEW = { num: null };
+async function loadOrder(id, num){
+  VIEW.num = num == null ? null : String(num);
+  app.innerHTML = '<p class="muted">Loading order…</p>';
+  try { const d = await api({ action: 'order', id }); take(d); render(); }
+  catch (err) { if (PIN) app.innerHTML = `<button class="btn ghost small back" onclick="location.hash=''">All orders</button><p class="err">${esc(err.message)}</p>`; }
+}
+function take(d){ ALL = null; O = d.order; STAGES = d.stages || STAGES; STAGE_EMAILS = d.stageEmails || STAGE_EMAILS; }
+function render(){ if (VIEW.num != null && O.items.some(x => String(x.num) === VIEW.num)) renderCard(); else renderOrder(); }
+function statusCtl(it){
+  const st = it.status, opts = (STAGES.indexOf(st) === -1 ? [st] : []).concat(STAGES);
+  return `<div class="stctl" data-stnum="${esc(it.num)}"><select data-st aria-label="Status for ${esc(cap(C.item))} ${esc(it.num)}">${opts.map(x => `<option${x === st ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select>` +
+    `<div class="stconfirm" hidden><label>Note to customer <span class="muted" style="font-weight:400">(optional, goes in the email)</span><textarea data-stnote>${esc(it.noteToCustomer)}</textarea></label>` +
+    `<span class="muted" data-stmsg style="font-size:13px"></span><div class="btns"><button class="btn small" data-stgo>Update status</button><button class="btn ghost small" data-stcancel>Cancel</button></div></div></div>`;
+}
+function wireStatus(root){
+  $$('.stctl', root).forEach(ctl => {
+    const it = O.items.find(x => String(x.num) === ctl.dataset.stnum), sel = $('[data-st]', ctl), box = $('.stconfirm', ctl), msg = $('[data-stmsg]', ctl);
+    sel.addEventListener('change', () => {
+      if (sel.value === it.status) { box.hidden = true; return; }
+      box.hidden = false;
+      msg.textContent = STAGE_EMAILS[sel.value] ? 'The customer gets an email about this stage.' : 'No email is sent for this stage.';
+    });
+    $('[data-stcancel]', ctl).onclick = () => { sel.value = it.status; box.hidden = true; };
+    $('[data-stgo]', ctl).onclick = async e => {
+      const b = e.currentTarget; b.disabled = true; b.textContent = 'Updating…';
+      try { const d = await api({ action: 'status', id: O.id, num: it.num, status: sel.value, note: $('[data-stnote]', ctl).value });
+        take(d); const y = scrollY; render(); scrollTo(0, y);
+        toast(cap(C.item) + ' ' + it.num + ': ' + d.statusResult.status + (d.statusResult.emailed ? ' — customer emailed' : '')); }
+      catch (err) { toast(err.message); b.disabled = false; b.textContent = 'Update status'; }
+    };
+  });
+}
+function renderCard(){
+  const it = O.items.find(x => String(x.num) === VIEW.num), i = O.items.indexOf(it);
+  const prev = O.items[i - 1], next = O.items[i + 1];
+  hdrRefresh(() => loadOrder(O.id, VIEW.num));
+  app.innerHTML = `<div class="toolbar"><button class="btn ghost small" id="toorder">Back to order</button>` +
+    (prev ? `<button class="btn ghost small" data-go="${esc(prev.num)}">Previous ${esc(C.item)}</button>` : '') +
+    (next ? `<button class="btn ghost small" data-go="${esc(next.num)}">Next ${esc(C.item)}</button>` : '') + `</div>` +
+    `<p class="muted" style="margin:0 0 10px">${esc(O.name || 'No name')}, ${esc(O.ref)}, ${esc(cap(C.item))} ${i + 1} of ${O.items.length}</p>` + cardHtml(it, true);
+  $('#toorder').onclick = () => { location.hash = '#' + encodeURIComponent(O.id); };
+  $$('[data-go]').forEach(b => b.onclick = () => { location.hash = '#' + encodeURIComponent(O.id) + '/' + encodeURIComponent(b.dataset.go); });
+  wireCard(it); wireStatus(app);
+}
+function renderOrder(){
+  hdrRefresh(() => loadOrder(O.id));
+  const qt = O.quote || { lines: [], subtotal: 0, referral: 0, yours: 0, total: 0, notes: [] };
+  app.innerHTML =
+    `<button class="btn ghost small back" id="back">Back</button>` +
+    `<div class="ohead"><div><h1>${esc(O.name || 'No name')}</h1><div class="contact">` +
+      `<span class="muted">${esc(O.ref)}, ${esc(when(O.at))}</span>` +
+      (O.email ? `<a href="mailto:${esc(O.email)}">${esc(O.email)}</a>` : '') + (O.phone ? `<a href="tel:${esc(O.phone.replace(/[^+\d]/g, ''))}">${esc(O.phone)}</a>` : '') +
+      `<span>${esc(O.delivery)}${O.insured === 'Yes' ? ', insured return' : ''}</span>${O.address ? `<span class="muted">${esc(O.address)}</span>` : ''}</div></div>` +
+      `<span class="status">${esc(O.status)}</span></div>` +
+    `<section class="panel quote" aria-label="Quote"><h2>Quote</h2>` +
+      qt.lines.map(l => `<div class="qline"><span>${esc(cap(C.item))} ${esc(l.num)}${l.name ? ': ' + esc(l.name) : ''}<span class="bd">${esc(l.breakdown)}</span></span><b>${l.cancelled ? 'Not charged' : l.quote == null ? 'Needs a price' : money(l.quote)}</b></div>`).join('') +
+      `<div class="qline"><span>Subtotal</span><b>${money(qt.subtotal)}</b></div>` +
+      (qt.referral ? `<div class="qline"><span>Referral ${esc(qt.referralCode)}</span><b>−${money(qt.referral)}</b></div>` : '') +
+      (qt.yours ? `<div class="qline"><span>Your discount (${esc(qt.discountLabel)})</span><b>−${money(qt.yours)}</b></div>` : '') +
+      `<div class="qtotal"><span class="muted">Total to charge</span><span class="big">${money(qt.total)}</span></div>` +
+      `<div class="disc"><label for="disc" class="muted">Your discount</label><input type="text" id="disc" placeholder="10% or 15" value="${esc(qt.discount || '')}">` +
+      `<button class="btn small" id="discgo">Apply</button>${qt.discount ? '<button class="btn ghost small" id="discclear">Remove</button>' : ''}</div>` +
+      (qt.notes.length ? `<ul class="qnotes">${qt.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
+    `</section>` +
+    `<section class="panel clist" aria-label="${esc(cap(C.items))}"><h2>${esc(cap(C.items))}</h2>` +
+      O.items.map(it => `<div class="crow"><span><a href="#${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}">${esc(cap(C.item))} ${esc(it.num)}: ${esc(it.name || 'Unnamed')}</a>` +
+        `<span class="sub">${esc(it.service || '')}</span></span>${statusCtl(it)}</div>`).join('') + `</section>` +
+    O.items.map(it => cardHtml(it, false)).join('');
+  $('#back').onclick = () => { location.hash = BACKTO; };
+  $('#discgo').onclick = () => save({ action: 'discount', id: O.id, value: $('#disc').value.trim() }, 'Discount applied');
+  if ($('#discclear')) $('#discclear').onclick = () => save({ action: 'discount', id: O.id, value: '' }, 'Discount removed');
+  $('#disc').addEventListener('keydown', e => { if (e.key === 'Enter') $('#discgo').click(); });
+  O.items.forEach(wireCard);
+  wireStatus(app);
+}
+function cardHtml(it, single){
+  const cust = [['Front', it.front], ['Back', it.back]].filter(x => x[1]).concat(it.details.map((u, i) => ['Detail ' + (i + 1), u]));
+  const strip = (kind, list) => `<div class="strip">${list.map(u => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${kind} photo" loading="lazy"></a><button class="x" data-rm="${kind}" data-url="${esc(u)}" aria-label="Remove ${kind} photo">×</button></span>`).join('')}` +
+    `<label class="add" data-add="${kind}">Add ${kind} photos<input type="file" accept="image/*,.heic,.heif" multiple hidden></label></div>`;
+  return `<section class="panel card" data-num="${esc(it.num)}" aria-label="${esc(cap(C.item))} ${esc(it.num)}"><div class="chead"><h3>${esc(cap(C.item))} ${esc(it.num)}: ${esc(it.name || 'Unnamed')}${single ? '' : `<a class="openlink" href="#${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}">Open on its own</a>`}</h3>${statusCtl(it)}</div>` +
+    `<dl class="facts"><dt>Service</dt><dd>${esc(it.service || '—')}</dd>${it.value ? `<dt>Value</dt><dd>${esc(it.value)}</dd>` : ''}${it.notes ? `<dt>Customer notes</dt><dd>${esc(it.notes)}</dd>` : ''}` +
+    `<dt>Quote</dt><dd><b>${/cancel/i.test(it.status) ? 'Not charged' : it.quote == null ? 'Needs a price' : money(it.quote)}</b> <span class="muted">${esc(it.breakdown)}</span></dd></dl>` +
+    (cust.length ? `<div class="ph"><b>Customer photos</b><div class="strip">${cust.map(([l, u]) => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${esc(l)}" loading="lazy"></a><span>${esc(l)}</span></span>`).join('')}</div></div>` : '') +
+    `<div class="ph"><b>Before photos</b>${strip('before', it.before)}</div>` +
+    `<div class="ph"><b>After photos</b>${strip('after', it.after)}</div>` +
+    `<div class="row2"><label><b style="font-size:14px">Intake notes</b> <span class="saved" data-saved hidden>Saved</span><textarea data-notes placeholder="Condition on arrival, what you found, what you did">${esc(it.intakeNotes)}</textarea></label>` +
+    `<label><b style="font-size:14px">Price override</b><input type="text" data-ov inputmode="decimal" placeholder="Use quote" value="${esc(it.override)}"><span class="muted" style="font-size:13px">Your price for this ${esc(C.item)}. Blank uses the quote.</span></label></div></section>`;
+}
+function wireCard(it){
+  const el = $(`.card[data-num="${CSS.escape(String(it.num))}"]`);
+  $$('.add', el).forEach(lab => $('input', lab).addEventListener('change', async e => {
+    const files = Array.from(e.target.files); e.target.value = ''; if (!files.length) return;
+    lab.classList.add('busy'); lab.firstChild.textContent = 'Uploading…';
+    try {
+      for (const f of files) { const url = await upload(f); await api({ action: 'photo', id: O.id, num: it.num, kind: lab.dataset.add, url }); }
+      toast(files.length > 1 ? files.length + ' photos added' : 'Photo added'); await loadOrder(O.id);
+    } catch (err) { toast(err.message); lab.classList.remove('busy'); lab.firstChild.textContent = 'Add ' + lab.dataset.add + ' photos'; }
+  }));
+  $$('[data-rm]', el).forEach(b => b.onclick = () => { if (b.dataset.armed) return save({ action: 'removePhoto', id: O.id, num: it.num, kind: b.dataset.rm, url: b.dataset.url }, 'Photo removed');
+    b.dataset.armed = '1'; b.textContent = '?'; b.setAttribute('aria-label', 'Tap again to remove'); setTimeout(() => { b.dataset.armed = ''; b.textContent = '×'; }, 3000); });
+  const ta = $('[data-notes]', el), saved = $('[data-saved]', el); let last = ta.value;
+  ta.addEventListener('blur', async () => { if (ta.value === last) return; try { await api({ action: 'note', id: O.id, num: it.num, text: ta.value }); last = ta.value; saved.hidden = false; setTimeout(() => { saved.hidden = true; }, 2000); } catch (err) { toast(err.message); } });
+  const ov = $('[data-ov]', el); let lastOv = ov.value;
+  const setOv = () => { if (ov.value.trim() === lastOv.trim()) return; lastOv = ov.value; save({ action: 'override', id: O.id, num: it.num, value: ov.value.trim() }, ov.value.trim() ? 'Price set' : 'Back to the quote'); };
+  ov.addEventListener('change', setOv); ov.addEventListener('keydown', e => { if (e.key === 'Enter') ov.blur(); });
+}
+async function save(body, done){
+  try { const d = await api(body); take(d); const y = scrollY; render(); scrollTo(0, y); toast(done); }
+  catch (err) { toast(err.message); }
+}
+
+
+/* ---------- Customers + Cards (all orders) ---------- */
+let ALL = null, cq = '', kq = '', kstage = 'open', BACKTO = '';
+const custKey = o => (o.email || '').toLowerCase() || (o.phone || '').replace(/[^\d]/g, '') || ('name:' + (o.name || '').trim().toLowerCase());
+async function loadAll(){
+  try { ALL = await api({ action: 'all' }); return true; }
+  catch (err) { if (PIN) app.innerHTML = `<p class="err">${esc(err.message)}</p>`; return false; }
+}
+function customers(){
+  const map = new Map();
+  ALL.orders.forEach(o => {
+    const k = custKey(o); if (!map.has(k)) map.set(k, { key: k, orders: [], name: '', email: '', phone: '', address: '' });
+    const c = map.get(k); c.orders.push(o);
+    if (!c.last || o.at > c.last.at) { c.last = o; c.name = o.name || c.name; c.email = o.email || c.email; c.phone = o.phone || c.phone; c.address = o.address || c.address; }
+  });
+  return [...map.values()].map(c => {
+    const ids = new Set(c.orders.map(o => o.id)), cards = ALL.cards.filter(x => ids.has(x.id));
+    const done = ALL.doneStages || [];
+    return Object.assign(c, { cards, total: c.orders.reduce((a, o) => a + (o.total || 0), 0),
+      open: c.orders.filter(o => !done.includes(o.status)).length });
+  }).sort((a, b) => (b.last.at || '').localeCompare(a.last.at || ''));
+}
+function setNav(active){
+  const n = $('#tabs') || (() => { const x = document.createElement('nav'); x.id = 'tabs'; x.className = 'tabs'; x.setAttribute('aria-label', 'Sections'); $('header.top .wrap').insertBefore(x, $('#hdr')); return x; })();
+  n.innerHTML = [['orders', '#', 'Orders'], ['customers', '#customers', 'Customers'], ['cards', '#cards', cap(C.items)], ['site', '#site', 'Website']]
+    .map(([k, h, l]) => `<a href="${h}"${k === active ? ' aria-current="page"' : ''}>${l}</a>`).join('');
+}
+function hdrRefresh(fn){ $('#hdr').innerHTML = `<button class="btn ghost small" id="refresh">Refresh</button> <button class="btn ghost small" id="signout">Sign out</button>`; $('#refresh').onclick = fn; $('#signout').onclick = signOut; }
+function signOut(){ PIN = ''; try { sessionStorage.removeItem('intake-pin'); localStorage.removeItem('intake-pin-keep'); } catch (_) {} LIST = null; ALL = null; SITE = null; O = null; location.hash = ''; showPin('Signed out.'); }
+const cardRow = (x, order) => `<a class="crd" href="#${encodeURIComponent(x.id)}/${encodeURIComponent(x.num)}">` +
+  (x.photo ? `<img src="${esc(thumb(x.photo))}" alt="" loading="lazy">` : '<span class="noimg"></span>') +
+  `<span><span class="t">${esc(x.name || 'Unnamed')}</span><span class="s">${esc(x.service || '')}</span>` +
+  `<span class="s">${order ? esc(order.name || '') + ', ' : ''}${esc(order ? order.ref : '')}${x.before ? ', before photos ' + x.before : ''}${x.after ? ', after photos ' + x.after : ''}</span></span>` +
+  `<span class="r"><span class="status${/cancel/i.test(x.status) ? ' cancel' : (ALL.doneStages || []).includes(x.status) ? ' done' : ''}">${esc(x.status)}</span><br><b>${/cancel/i.test(x.status) ? 'Not charged' : money(x.quote)}</b></span></a>`;
+
+async function showCustomers(){
+  setNav('customers'); hdrRefresh(async () => { ALL = null; showCustomers(); });
+  if (!ALL) { app.innerHTML = '<p class="muted">Loading customers…</p>'; if (!(await loadAll())) return; }
+  const list = customers(), shown = list.filter(c => !cq || (c.name + ' ' + c.email + ' ' + c.phone).toLowerCase().includes(cq));
+  app.innerHTML = `<div class="toolbar"><input type="search" id="cq" placeholder="Search name, email or phone" value="${esc(cq)}" aria-label="Search customers"><a class="btn small" href="#new" style="text-decoration:none">New customer</a></div>` +
+    `<div class="stats"><div class="stat"><b>${list.length}</b><span>${list.length === 1 ? 'customer' : 'customers'}</span></div><div class="stat"><b>${list.filter(c => c.orders.length > 1).length}</b><span>repeat</span></div>` +
+    `<div class="stat"><b>${list.filter(c => c.open).length}</b><span>with open orders</span></div><div class="stat"><b>${money(list.reduce((a, c) => a + c.total, 0))}</b><span>quoted, all time</span></div></div>` +
+    `<div class="orders">${shown.length ? shown.map(c => `<a class="cust" href="#customer=${encodeURIComponent(c.key)}"><span class="who">${esc(c.name || 'No name')}</span>` +
+      `<span class="amt">${money(c.total)}<small>quoted</small></span><span class="tags">${c.email ? `<span class="tag">${esc(c.email)}</span>` : ''}${c.phone ? `<span class="tag">${esc(c.phone)}</span>` : ''}` +
+      `<span class="tag">${c.orders.length} ${c.orders.length === 1 ? 'order' : 'orders'}</span><span class="tag">${c.cards.length} ${c.cards.length === 1 ? esc(C.item) : esc(C.items)}</span>` +
+      `<span class="tag">Last order ${esc(when(c.last.at).split(',')[0])}</span>${c.open ? `<span class="tag warn">${c.open} open</span>` : ''}</span></a>`).join('')
+      : `<div class="empty">${cq ? 'No customers match that search.' : 'No customers yet.'}</div>`}</div>`;
+  const qi = $('#cq'); qi.addEventListener('input', () => { cq = qi.value.trim().toLowerCase(); const p = qi.selectionStart; showCustomers(); const n = $('#cq'); n.focus(); n.setSelectionRange(p, p); });
+}
+async function showCustomer(key){
+  setNav('customers'); hdrRefresh(async () => { ALL = null; showCustomer(key); });
+  if (!ALL) { app.innerHTML = '<p class="muted">Loading customer…</p>'; if (!(await loadAll())) return; }
+  const c = customers().find(x => x.key === key);
+  if (!c) { app.innerHTML = `<a class="btn ghost small back" href="#customers">All customers</a><p class="err">Customer not found.</p>`; return; }
+  const byId = Object.fromEntries(c.orders.map(o => [o.id, o])), done = ALL.doneStages || [];
+  app.innerHTML = `<div class="toolbar"><a class="btn ghost small" href="#customers" style="text-decoration:none">All customers</a><a class="btn small" href="#new=${encodeURIComponent(c.key)}" style="text-decoration:none;margin-left:auto">New submission</a></div>` +
+    `<div class="ohead"><div><h1>${esc(c.name || 'No name')}</h1><div class="contact">` +
+    (c.email ? `<a href="mailto:${esc(c.email)}">${esc(c.email)}</a>` : '') + (c.phone ? `<a href="tel:${esc(c.phone.replace(/[^+\d]/g, ''))}">${esc(c.phone)}</a>` : '') +
+    (c.address ? `<span class="muted">${esc(c.address)}</span>` : '') + `</div></div></div>` +
+    `<div class="stats"><div class="stat"><b>${c.orders.length}</b><span>${c.orders.length === 1 ? 'order' : 'orders'}</span></div><div class="stat"><b>${c.cards.length}</b><span>${esc(C.items)}</span></div>` +
+    `<div class="stat"><b>${money(c.total)}</b><span>quoted</span></div><div class="stat"><b>${c.open}</b><span>open ${c.open === 1 ? 'order' : 'orders'}</span></div></div>` +
+    `<h2 class="sec">Orders</h2><div class="orders">${c.orders.slice().sort((a, b) => (b.at || '').localeCompare(a.at || '')).map(o =>
+      `<a class="cust" href="#${encodeURIComponent(o.id)}"><span class="who">${esc(o.ref)}</span><span class="amt">${money(o.total)}<small>quote</small></span>` +
+      `<span class="tags"><span class="tag">${esc(when(o.at))}</span><span class="tag">${o.count} ${o.count === 1 ? esc(C.item) : esc(C.items)}</span><span class="tag${done.includes(o.status) ? ' ok' : ''}">${esc(o.status)}</span>` +
+      `<span class="tag">${esc(o.delivery)}</span>${o.referralCode ? `<span class="tag">Referral ${esc(o.referralCode)}</span>` : ''}${o.flagged ? '<span class="tag warn">Quote needs a look</span>' : ''}</span></a>`).join('')}</div>` +
+    `<h2 class="sec">${esc(cap(C.items))}</h2><div class="orders">${c.cards.map(x => cardRow(x, byId[x.id])).join('')}</div>`;
+}
+async function showCards(){
+  setNav('cards'); hdrRefresh(async () => { ALL = null; showCards(); });
+  if (!ALL) { app.innerHTML = '<p class="muted">Loading ' + esc(C.items) + '…</p>'; if (!(await loadAll())) return; }
+  const byId = Object.fromEntries(ALL.orders.map(o => [o.id, o])), done = ALL.doneStages || [];
+  const count = st => ALL.cards.filter(x => st === 'open' ? !done.includes(x.status) : st === 'all' ? true : x.status === st).length;
+  const chips = [['open', 'In progress'], ['all', 'All']].concat(ALL.stages.map(s => [s, s]));
+  const shown = ALL.cards.filter(x => (kstage === 'open' ? !done.includes(x.status) : kstage === 'all' ? true : x.status === kstage) &&
+    (!kq || (x.name + ' ' + x.service + ' ' + (byId[x.id] ? byId[x.id].name + ' ' + byId[x.id].ref : '')).toLowerCase().includes(kq)))
+    .sort((a, b) => (b.updated || '').localeCompare(a.updated || ''));
+  app.innerHTML = `<div class="toolbar"><input type="search" id="kq" placeholder="Search ${esc(C.item)}, service, customer or reference" value="${esc(kq)}" aria-label="Search ${esc(C.items)}"></div>` +
+    `<div class="chips" role="group" aria-label="Filter by stage">${chips.map(([k, l]) => `<button data-k="${esc(k)}" aria-pressed="${kstage === k}">${esc(l)} (${count(k)})</button>`).join('')}</div>` +
+    `<div class="orders">${shown.length ? shown.map(x => cardRow(x, byId[x.id])).join('') : `<div class="empty">No ${esc(C.items)} here.</div>`}</div>`;
+  $$('.chips button').forEach(b => b.onclick = () => { kstage = b.dataset.k; showCards(); });
+  const qi = $('#kq'); qi.addEventListener('input', () => { kq = qi.value.trim().toLowerCase(); const p = qi.selectionStart; showCards(); const n = $('#kq'); n.focus(); n.setSelectionRange(p, p); });
+}
+
+
+/* ---------- Website editor ---------- */
+let SITE = null, SUB = 'status';
+const SUBS = [['status', 'Status & announcement'], ['sections', 'Sections'], ['prices', 'Prices'], ['shows', 'Shows'], ['news', 'News'], ['gallery', 'Gallery']];
+const deliverUrl = u => /res\.cloudinary\.com\/[^/]+\/image\/upload\/(?![a-z]_)/.test(u) ? u.replace('/image/upload/', '/image/upload/f_auto,q_auto,c_limit,w_1600/') : u;
+const siteLink = () => location.origin + location.pathname.replace(/intake\.html?$/, '');
+const yesv = v => v === true || /^(true|yes|1)$/i.test(String(v == null ? '' : v));
+const niceDate = s => { if (!s) return ''; const d = new Date(s + 'T12:00:00'); return isNaN(d) ? s : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); };
+async function siteSave(body, done){
+  const d = await api(Object.assign({ action: 'siteSave' }, body));
+  SITE = d; renderSite();
+  toast((done || 'Saved') + ' — live on your site within a minute');
+  return d;
+}
+function busy(btn, on, label){ if (!btn) return; btn.disabled = on; if (on) { btn.dataset.l = btn.textContent; btn.textContent = label || 'Saving…'; } else if (btn.dataset.l) btn.textContent = btn.dataset.l; }
+async function guarded(btn, fn){ busy(btn, true); try { await fn(); } catch (err) { toast(err.message); busy(btn, false); } }
+function linkPick(id, current){
+  const secs = (SITE.sections || []).filter(s => s.key !== 'hero');
+  const isUrl = current && current[0] !== '#';
+  return `<div class="lp" id="${id}"><select data-lp aria-label="Link to">` +
+    `<option value="">No link</option>${secs.map(s => `<option value="#${esc(s.key)}"${current === '#' + s.key ? ' selected' : ''}>Section: ${esc(s.label)}</option>`).join('')}` +
+    `<option value="url"${isUrl ? ' selected' : ''}>A web address…</option></select>` +
+    `<input type="text" data-lpu placeholder="https://…" value="${isUrl ? esc(current) : ''}"${isUrl ? '' : ' hidden'}></div>`;
+}
+function wireLink(id){ const w = $('#' + id); const sel = $('[data-lp]', w), u = $('[data-lpu]', w); sel.onchange = () => { u.hidden = sel.value !== 'url'; if (!u.hidden) u.focus(); }; return () => sel.value === 'url' ? u.value.trim() : sel.value; }
+const sw = (id, on, label) => `<label class="sw"><input type="checkbox" role="switch" id="${id}"${on ? ' checked' : ''}><span>${label}</span></label>`;
+
+async function showSite(sub){
+  setNav('site'); SUB = sub || SUB;
+  hdrRefresh(async () => { SITE = null; showSite(SUB); });
+  if (!SITE) { app.innerHTML = '<p class="muted">Loading your website settings…</p>'; try { SITE = await api({ action: 'site' }); } catch (err) { app.innerHTML = `<p class="err">${esc(err.message)}</p>`; return; } }
+  renderSite();
+}
+function renderSite(){
+  if (!SITE.seeded) {
+    app.innerHTML = `<div class="panel"><h2 style="margin-bottom:8px">Almost ready</h2><p>Your website hasn’t set up its editable settings yet. Open <a href="${esc(siteLink())}" target="_blank" rel="noopener">your website</a> once, wait a few seconds, then tap Refresh above.</p></div>`;
+    return;
+  }
+  const y = scrollY;
+  app.innerHTML = `<div class="sitehead"><p class="muted">Changes go live on <a href="${esc(siteLink())}" target="_blank" rel="noopener">your website</a> within about a minute.</p></div>` +
+    `<div class="chips" role="tablist" aria-label="What to edit">${SUBS.map(([k, l]) => `<button role="tab" data-sub="${k}" aria-pressed="${SUB === k}" aria-selected="${SUB === k}">${l}</button>`).join('')}</div><div id="sub"></div>`;
+  $$('[data-sub]').forEach(b => b.onclick = () => { location.hash = '#site=' + b.dataset.sub; });
+  ({ status: subStatus, sections: subSections, prices: subPrices, shows: subShows, news: subNews, gallery: subGallery })[SUB]($('#sub'));
+  scrollTo(0, y);
+}
+
+/* Status & announcement */
+function subStatus(box){
+  const st = SITE.settings, open = !Object.prototype.hasOwnProperty.call(st, 'accepting_submissions') || yesv(st.accepting_submissions), ann = yesv(st.announcement_on);
+  box.innerHTML = `<section class="panel ed"><h2>Submissions</h2>${sw('acc', open, 'Accepting new submissions')}` +
+    `<label class="f" id="pmw"${open ? ' hidden' : ''}>Message shown instead of the form<input type="text" id="pm" maxlength="200" value="${esc(st.paused_message || '')}" placeholder="e.g. Back from vacation Jan 2!"></label></section>` +
+    `<section class="panel ed"><h2>Announcement bar</h2><p class="muted">A short message across the top of every page.</p>${sw('ann', ann, 'Show the announcement bar')}` +
+    `<div id="annw"${ann ? '' : ' hidden'}><label class="f">Message<input type="text" id="at" maxlength="200" value="${esc(st.announcement_text || '')}" placeholder="e.g. Closed Nov 27–30 — submissions reopen Dec 1"></label>` +
+    `<div class="f"><b>Clicking it goes to</b>${linkPick('al', String(st.announcement_link || ''))}</div></div></section>` +
+    `<section class="panel ed"><h2>News section title</h2><label class="f">Title<input type="text" id="nh" maxlength="80" value="${esc(st.news_heading || 'News & coming soon')}"></label></section>` +
+    `<div class="savebar"><button class="btn" id="save1">Save changes</button></div>`;
+  const al = wireLink('al');
+  $('#acc').onchange = () => { $('#pmw').hidden = $('#acc').checked; };
+  $('#ann').onchange = () => { $('#annw').hidden = !$('#ann').checked; };
+  $('#save1').onclick = e => guarded(e.currentTarget, () => siteSave({ what: 'settings', data: {
+    accepting_submissions: $('#acc').checked, paused_message: $('#pm').value, announcement_on: $('#ann').checked,
+    announcement_text: $('#at').value, announcement_link: al(), news_heading: $('#nh').value } }));
+}
+
+/* Sections: show/hide + order */
+function subSections(box){
+  let rows = SITE.sections.map(s => Object.assign({}, s));
+  const draw = () => {
+    box.innerHTML = `<section class="panel ed"><h2>Sections</h2><p class="muted">Switch sections on or off and move them up or down the page.</p><ol class="seclist">` +
+      rows.map((s, i) => `<li><span class="nm">${esc(s.label)}</span><span class="ctl">` +
+        `<button class="btn ghost small" data-up="${i}" aria-label="Move ${esc(s.label)} up"${i ? '' : ' disabled'}>Up</button>` +
+        `<button class="btn ghost small" data-dn="${i}" aria-label="Move ${esc(s.label)} down"${i < rows.length - 1 ? '' : ' disabled'}>Down</button>` +
+        `<label class="sw compact"><input type="checkbox" role="switch" data-i="${i}"${s.show ? ' checked' : ''} aria-label="Show ${esc(s.label)}"><span>${s.show ? 'Shown' : 'Hidden'}</span></label></span></li>`).join('') +
+      `</ol></section><div class="savebar"><button class="btn" id="save2">Save sections</button></div>`;
+    $$('[data-up]', box).forEach(b => b.onclick = () => { const i = +b.dataset.up; [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; draw(); $(`[data-up="${i - 1}"]`, box)?.focus(); });
+    $$('[data-dn]', box).forEach(b => b.onclick = () => { const i = +b.dataset.dn; [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; draw(); $(`[data-dn="${i + 1}"]`, box)?.focus(); });
+    $$('[data-i]', box).forEach(c => c.onchange = () => { rows[+c.dataset.i].show = c.checked; c.nextElementSibling.textContent = c.checked ? 'Shown' : 'Hidden'; });
+    $('#save2').onclick = e => guarded(e.currentTarget, () => siteSave({ what: 'sections', data: { rows: rows.map(r => ({ key: r.key, show: r.show })) } }, 'Sections saved'));
+  };
+  draw();
+}
+
+/* Prices */
+function subPrices(box){
+  let group = null, html = '';
+  SITE.prices.forEach((p, i) => {
+    if (p.group !== group) { group = p.group; html += `<tr class="grp"><td colspan="3">${esc(group || 'Prices')}</td></tr>`; }
+    html += `<tr data-i="${i}"><td>${esc(p.service)}${p.option ? `<span class="muted"> — ${esc(p.option)}</span>` : ''}</td>` +
+      `<td><span class="dollar">$<input type="text" inputmode="decimal" data-p value="${p.price == null ? '' : esc(p.price)}" aria-label="Price for ${esc(p.service)} ${esc(p.option)}"></span></td>` +
+      `<td><input type="text" data-d value="${esc(p.days)}" placeholder="—" aria-label="Turnaround for ${esc(p.service)} ${esc(p.option)}"></td></tr>`;
+  });
+  box.innerHTML = `<section class="panel ed"><h2>Prices</h2><p class="muted">These update your price cards, the price estimate, the order form and your quotes.</p>` +
+    `<div class="tablewrap"><table class="ptab"><thead><tr><th>Service</th><th>Price</th><th>Turnaround</th></tr></thead><tbody>${html}</tbody></table></div></section>` +
+    `<div class="savebar"><button class="btn" id="save3">Save prices</button><span class="muted" id="pchg"></span></div>`;
+  const changed = () => $$('tr[data-i]', box).filter(tr => { const p = SITE.prices[tr.dataset.i]; return $('[data-p]', tr).value.trim() !== String(p.price == null ? '' : p.price) || $('[data-d]', tr).value.trim() !== p.days; });
+  const mark = () => { $$('tr[data-i]', box).forEach(tr => tr.classList.remove('chg')); const c = changed(); c.forEach(tr => tr.classList.add('chg')); $('#pchg').textContent = c.length ? c.length + ' changed' : ''; };
+  $$('input', box).forEach(i => i.addEventListener('input', mark));
+  $('#save3').onclick = e => guarded(e.currentTarget, async () => {
+    const rows = changed().map(tr => { const p = SITE.prices[tr.dataset.i]; return { row: p.row, service: p.service, option: p.option, price: $('[data-p]', tr).value.trim(), days: $('[data-d]', tr).value.trim() }; });
+    if (!rows.length) { toast('No price changes to save.'); busy(e.currentTarget, false); return; }
+    await siteSave({ what: 'prices', data: { rows } }, rows.length === 1 ? 'Price saved' : rows.length + ' prices saved');
+  });
+}
+
+/* Shared list editor for Shows and News */
+function listEditor(box, cfg){
+  const items = cfg.items();
+  box.innerHTML = `<section class="panel ed"><div class="edhead"><h2>${cfg.title}</h2><button class="btn small" id="addnew">${cfg.addLabel}</button></div>` +
+    (cfg.intro ? `<p class="muted">${cfg.intro}</p>` : '') + `<div id="formslot"></div><div class="elist">` +
+    (items.length ? items.map((x, i) => `<div class="eitem${cfg.dim && cfg.dim(x) ? ' dim' : ''}" data-i="${i}"><div class="einfo">${cfg.summary(x)}</div><div class="ectl">` +
+      (cfg.toggle ? cfg.toggle(x, i) : '') + `<button class="btn ghost small" data-edit="${i}">Edit</button><button class="btn ghost small del" data-del="${i}">Delete</button></div></div>`).join('')
+      : `<div class="empty">${cfg.empty}</div>`) + `</div></section>`;
+  const openForm = (x, i) => {
+    const slot = i == null ? $('#formslot', box) : $(`.eitem[data-i="${i}"]`, box);
+    $$('.eform', box).forEach(f => f.remove());
+    slot.insertAdjacentHTML(i == null ? 'afterbegin' : 'beforeend', `<form class="eform">${cfg.form(x || {})}<div class="savebar"><button class="btn" type="submit">${i == null ? cfg.addLabel : 'Save changes'}</button><button class="btn ghost" type="button" data-cancel>Cancel</button></div></form>`);
+    const f = $('.eform', box), getLink = cfg.wire ? cfg.wire(f) : null;
+    $('[data-cancel]', f).onclick = () => f.remove();
+    f.querySelector('input, textarea').focus();
+    f.onsubmit = e => { e.preventDefault(); const btn = $('button[type=submit]', f);
+      guarded(btn, () => siteSave(i == null ? { what: cfg.what, op: 'add', data: cfg.collect(f, getLink) }
+        : { what: cfg.what, op: 'update', row: x.row, was: cfg.was(x), data: cfg.collect(f, getLink) }, i == null ? cfg.added : 'Saved')); };
+  };
+  $('#addnew', box).onclick = () => openForm(null, null);
+  $$('[data-edit]', box).forEach(b => b.onclick = () => openForm(items[+b.dataset.edit], +b.dataset.edit));
+  $$('[data-del]', box).forEach(b => b.onclick = () => {
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Tap again to delete'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Delete'; }, 4000); return; }
+    const x = items[+b.dataset.del]; guarded(b, () => siteSave({ what: cfg.what, op: 'delete', row: x.row, was: cfg.was(x) }, 'Deleted'));
+  });
+  if (cfg.after) cfg.after(box, items);
+}
+function subShows(box){
+  const today = new Date().toISOString().slice(0, 10);
+  listEditor(box, {
+    what: 'shows', title: 'Shows & events', addLabel: 'Add a show', added: 'Show added', empty: 'No shows yet. Add one and it appears in your events section.',
+    intro: 'Past shows drop off your site automatically.',
+    items: () => SITE.shows.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '')),
+    dim: x => (x.endDate || x.date) < today,
+    summary: x => `<b>${esc(x.name)}</b><span class="muted">${esc(niceDate(x.date))}${x.endDate ? ' – ' + esc(niceDate(x.endDate)) : ''}${(x.endDate || x.date) < today ? ' (past)' : ''}</span>` +
+      (x.location ? `<span class="muted">${esc(x.location)}</span>` : '') + (x.time ? `<span class="muted">${esc(x.time)}</span>` : ''),
+    was: x => x.name,
+    form: x => `<label class="f">Event name<input type="text" name="name" maxlength="100" value="${esc(x.name || '')}" required></label>` +
+      `<div class="g2"><label class="f">Start date<input type="date" name="date" value="${esc(x.date || '')}" required></label><label class="f"><span>End date <span class="muted">(optional)</span></span><input type="date" name="endDate" value="${esc(x.endDate || '')}"></label></div>` +
+      `<label class="f">Location<input type="text" name="location" maxlength="200" value="${esc(x.location || '')}" placeholder="Venue, city"></label>` +
+      `<label class="f"><span>Time or table number <span class="muted">(optional)</span></span><input type="text" name="time" maxlength="120" value="${esc(x.time || '')}" placeholder="e.g. 10am–6pm, Table 214"></label>` +
+      `<label class="f"><span>Event link <span class="muted">(optional)</span></span><input type="text" name="link" value="${esc(x.link || '')}" placeholder="https://…"></label>`,
+    collect: f => ({ name: f.elements.name.value, date: f.elements.date.value, endDate: f.elements.endDate.value, location: f.elements.location.value, time: f.elements.time.value, link: f.elements.link.value.trim() })
+  });
+}
+function subNews(box){
+  listEditor(box, {
+    what: 'news', title: 'News posts', addLabel: 'Add a post', added: 'Post published', empty: 'No posts yet. Your News section appears once you publish one.',
+    items: () => SITE.news.slice().reverse(),
+    dim: x => !x.show,
+    summary: x => `<b>${esc(x.title || x.message.slice(0, 60))}</b>${x.date ? `<span class="muted">${esc(niceDate(x.date))}</span>` : ''}<span class="muted clamp">${esc(x.message)}</span>`,
+    toggle: (x, i) => `<label class="sw compact"><input type="checkbox" role="switch" data-pub="${i}"${x.show ? ' checked' : ''} aria-label="Published"><span>${x.show ? 'Published' : 'Draft'}</span></label>`,
+    was: x => x.title,
+    form: x => `<label class="f">Title<input type="text" name="title" maxlength="120" value="${esc(x.title || '')}" placeholder="e.g. Holiday turnaround"></label>` +
+      `<label class="f">Message<textarea name="message" maxlength="1000" rows="4">${esc(x.message || '')}</textarea></label>` +
+      `<div class="g2"><label class="f"><span>Date shown <span class="muted">(optional)</span></span><input type="date" name="date" value="${esc(x.date || '')}"></label>` +
+      `<label class="f"><span>Button text <span class="muted">(optional)</span></span><input type="text" name="buttonText" maxlength="40" value="${esc(x.buttonText || '')}" placeholder="e.g. See pricing"></label></div>` +
+      `<div class="f"><b>Button goes to</b>${linkPick('nl', x.buttonLink || '')}</div>` + sw('npub', x.show !== false, 'Published on the site'),
+    wire: f => wireLink('nl'),
+    collect: (f, getLink) => ({ title: f.elements.title.value, message: f.elements.message.value, date: f.elements.date.value, buttonText: f.elements.buttonText.value, buttonLink: getLink(), show: $('#npub', f).checked }),
+    after: (b2, items) => $$('[data-pub]', b2).forEach(c => c.onchange = () => { const x = items[+c.dataset.pub];
+      siteSave({ what: 'news', op: 'update', row: x.row, was: x.title, data: Object.assign({}, x, { show: c.checked }) }, c.checked ? 'Post published' : 'Post hidden').catch(err => { toast(err.message); c.checked = !c.checked; }); })
+  });
+}
+
+/* Gallery */
+function subGallery(box){
+  const g = SITE.gallery;
+  box.innerHTML = `<section class="panel ed"><div class="edhead"><h2>Gallery</h2><label class="btn small" for="gup">Add photos</label><input type="file" id="gup" accept="image/*,.heic,.heif" multiple hidden></div>` +
+    `<p class="muted">Photos here show first in your gallery, in this order. Tap a photo’s Edit to change its title.</p><div id="queue"></div>` +
+    (g.length ? `<div class="ggrid">${g.map((x, i) => `<figure class="gitem${x.show ? '' : ' dim'}" data-i="${i}"><img src="${esc(thumb(x.image || x.after))}" alt="${esc(x.title || 'Gallery photo')}" loading="lazy">` +
+      `<figcaption><b>${esc(x.title || 'Untitled')}</b>${x.subtitle ? `<span class="muted">${esc(x.subtitle)}</span>` : ''}${x.before ? '<span class="muted">Before &amp; after</span>' : ''}</figcaption>` +
+      `<div class="gctl"><button class="btn ghost small" data-l="${i}" aria-label="Move earlier"${i ? '' : ' disabled'}>←</button><button class="btn ghost small" data-r="${i}" aria-label="Move later"${i < g.length - 1 ? '' : ' disabled'}>→</button>` +
+      `<label class="sw compact"><input type="checkbox" role="switch" data-show="${i}"${x.show ? ' checked' : ''} aria-label="Show on site"><span>${x.show ? 'Shown' : 'Hidden'}</span></label></div>` +
+      `<div class="gctl"><button class="btn ghost small" data-ge="${i}">Edit</button><button class="btn ghost small del" data-gd="${i}">Delete</button></div></figure>`).join('')}</div>`
+      : `<div class="empty">No photos yet. Add some and they show in your gallery section.</div>`) + `</section>`;
+  const move = (i, j) => { const rows = g.map(x => ({ row: x.row, was: x.image })); [rows[i], rows[j]] = [rows[j], rows[i]]; siteSave({ what: 'galleryOrder', data: { rows } }, 'Order saved').catch(err => toast(err.message)); };
+  $$('[data-l]', box).forEach(b => b.onclick = () => move(+b.dataset.l, +b.dataset.l - 1));
+  $$('[data-r]', box).forEach(b => b.onclick = () => move(+b.dataset.r, +b.dataset.r + 1));
+  $$('[data-show]', box).forEach(c => c.onchange = () => { const x = g[+c.dataset.show];
+    siteSave({ what: 'gallery', op: 'update', row: x.row, was: x.image, data: Object.assign({}, x, { show: c.checked }) }, c.checked ? 'Photo shown' : 'Photo hidden').catch(err => { toast(err.message); c.checked = !c.checked; }); });
+  $$('[data-gd]', box).forEach(b => b.onclick = () => {
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Tap again'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Delete'; }, 4000); return; }
+    const x = g[+b.dataset.gd]; guarded(b, () => siteSave({ what: 'gallery', op: 'delete', row: x.row, was: x.image }, 'Photo deleted'));
+  });
+  $$('[data-ge]', box).forEach(b => b.onclick = () => {
+    const x = g[+b.dataset.ge], fig = b.closest('.gitem'); $$('.eform', box).forEach(f => f.remove());
+    fig.insertAdjacentHTML('beforeend', `<form class="eform"><label class="f">Title<input type="text" name="title" maxlength="80" value="${esc(x.title)}"></label>` +
+      `<label class="f">Set or caption<input type="text" name="subtitle" maxlength="80" value="${esc(x.subtitle)}"></label><label class="f">Tag<input type="text" name="tag" maxlength="24" value="${esc(x.tag)}"></label>` +
+      `<div class="savebar"><button class="btn small" type="submit">Save</button><button class="btn ghost small" type="button" data-cancel>Cancel</button></div></form>`);
+    const f = $('.eform', fig); $('[data-cancel]', f).onclick = () => f.remove(); f.elements.title.focus();
+    f.onsubmit = e => { e.preventDefault(); guarded($('button[type=submit]', f), () => siteSave({ what: 'gallery', op: 'update', row: x.row, was: x.image,
+      data: Object.assign({}, x, { title: f.elements.title.value, subtitle: f.elements.subtitle.value, tag: f.elements.tag.value }) }, 'Photo saved')); };
+  });
+  $('#gup').onchange = async e => {
+    const files = Array.from(e.target.files); e.target.value = ''; if (!files.length) return;
+    const q = $('#queue', box);
+    q.innerHTML = `<form class="eform" id="gq"><p><b>New photos</b> <span class="muted" id="gqs">Uploading ${files.length}…</span></p><div class="qlist"></div>` +
+      `<div class="savebar"><button class="btn" type="submit" disabled>Add to gallery</button><button class="btn ghost" type="button" data-cancel>Cancel</button></div></form>`;
+    const f = $('#gq'), list = $('.qlist', f); $('[data-cancel]', f).onclick = () => { q.innerHTML = ''; };
+    let left = files.length;
+    for (const file of files) {
+      const row = document.createElement('div'); row.className = 'qrow'; row.innerHTML = `<span class="qimg">…</span><div class="qf"><input type="text" data-t placeholder="Title, e.g. Charizard" maxlength="80"><input type="text" data-s placeholder="Set or caption" maxlength="80"><input type="text" data-g placeholder="Tag (optional)" maxlength="24"></div>`;
+      list.appendChild(row);
+      try { const url = deliverUrl(await uploadTo(file, 'site/gallery')); row.dataset.url = url; $('.qimg', row).outerHTML = `<img class="qimg" src="${esc(thumb(url))}" alt="">`; }
+      catch (err) { $('.qimg', row).textContent = '!'; row.querySelector('.qf').insertAdjacentHTML('afterbegin', `<span class="err">${esc(err.message)}</span>`); }
+      if (--left === 0) { $('#gqs').textContent = ''; $('button[type=submit]', f).disabled = false; }
+    }
+    f.onsubmit = ev => { ev.preventDefault(); const btn = $('button[type=submit]', f);
+      guarded(btn, async () => {
+        const rows = $$('.qrow', list).filter(r => r.dataset.url);
+        const min = g.length ? Math.min(...g.map(x => x.order)) : 100;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i];
+          await api({ action: 'siteSave', what: 'gallery', op: 'add', data: { image: r.dataset.url, title: $('[data-t]', r).value, subtitle: $('[data-s]', r).value, tag: $('[data-g]', r).value, order: min - (rows.length - i) * 10, show: true } });
+        }
+        SITE = await api({ action: 'site' }); renderSite(); toast((rows.length === 1 ? 'Photo added' : rows.length + ' photos added') + ' — live on your site within a minute');
+      }); };
+  };
+}
+async function uploadTo(file, folder){
+  if (!C.cloudinaryCloud || !C.cloudinaryPreset) throw new Error('Photo uploads aren’t set up — add Cloudinary to CONFIG.');
+  const fd = new FormData(); fd.append('file', await shrink(file)); fd.append('upload_preset', C.cloudinaryPreset); fd.append('folder', folder);
+  const res = await fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(C.cloudinaryCloud) + '/image/upload', { method: 'POST', body: fd });
+  const d = await res.json(); if (!d.secure_url) throw new Error((d.error && d.error.message) || 'Upload failed'); return d.secure_url;
+}
+
+
+/* ---------- New submission (owner) ---------- */
+function priceMenu(){
+  const P = (SITE && SITE.prices) || [], norm = v => String(v || '').toLowerCase().trim();
+  const svc = [], adds = [];
+  P.forEach(p => {
+    const o = norm(p.option);
+    if (p.price == null) return;
+    if (o === 'with another service') { adds.push({ label: p.service, price: p.price }); return; }
+    if (/^each additional card/.test(o)) return;
+    const next = o === 'on its own' ? P.find(x => x.service === p.service && /^each additional card/.test(norm(x.option))) : null;
+    const value = o === 'on its own' ? `${p.service} only ($${p.price})` : p.option ? `${p.service} — ${p.option} ($${p.price})` : `${p.service} ($${p.price})`;
+    const label = o === 'on its own' ? `${p.service} only — $${p.price}${next ? ` first, $${next.price} each after` : ''}` : p.option ? `${p.service} — ${p.option} — $${p.price}` : `${p.service} — $${p.price}`;
+    svc.push({ group: p.group, value, label, price: p.price, solo: o === 'on its own', key: p.service, next: next ? next.price : null });
+  });
+  return { svc, adds };
+}
+async function showNew(key){
+  setNav(key ? 'customers' : 'orders'); hdrRefresh(() => showNew(key));
+  app.innerHTML = '<p class="muted">Loading your services…</p>';
+  try { if (!SITE) SITE = await api({ action: 'site' }); if (!ALL) ALL = await api({ action: 'all' }); }
+  catch (err) { app.innerHTML = `<p class="err">${esc(err.message)}</p>`; return; }
+  const c = key ? customers().find(x => x.key === key) : null, menu = priceMenu();
+  const deliveries = [...new Set(['Hand-off: in person', 'Ship (mail)'].concat(ALL.orders.map(o => o.delivery).filter(Boolean)))];
+  app.innerHTML = `<a class="btn ghost small back" href="${c ? '#customer=' + encodeURIComponent(c.key) : '#'}" style="display:inline-block;text-decoration:none">Back</a>` +
+    `<h1 style="font-size:30px;margin-bottom:14px">New submission</h1><form id="nsf">` +
+    `<section class="panel ed"><h2>Customer</h2><div class="g2"><label class="f">Name<input type="text" name="cname" maxlength="80" value="${esc(c ? c.name : '')}" required></label>` +
+    `<label class="f"><span>Email <span class="muted">(for updates)</span></span><input type="email" name="cemail" maxlength="120" value="${esc(c ? c.email : '')}"></label></div>` +
+    `<div class="g2"><label class="f">Phone<input type="tel" name="cphone" maxlength="40" value="${esc(c ? c.phone : '')}"></label>` +
+    `<label class="f">How the ${esc(C.items)} get to you<select name="cdel">${deliveries.map(d => `<option${c && c.last && c.last.delivery === d ? ' selected' : ''}>${esc(d)}</option>`).join('')}</select></label></div>` +
+    `<label class="f"><span>Return address <span class="muted">(if shipping)</span></span><input type="text" name="caddr" maxlength="300" value="${esc(c ? c.address : '')}"></label></section>` +
+    `<div id="ncards"></div><button type="button" class="btn ghost" id="addcard">Add another ${esc(C.item)}</button>` +
+    `<section class="panel ed" style="margin-top:14px"><div class="qtotal"><span class="muted">Estimated total</span><span class="big" id="nstotal">$0.00</span></div>` +
+    `<p class="muted" id="nsnote" style="font-size:14px">The quote is worked out from your price list once it’s saved. You can add a discount or override prices on the order.</p>` +
+    `<label class="sw"><input type="checkbox" id="nsemail"${c && c.email ? ' checked' : ''}><span>Email the customer a confirmation with their reference number</span></label>` +
+    `<label class="sw"><input type="checkbox" id="nsterms"><span>The customer agreed to the Terms &amp; Conditions</span></label>` +
+    `<div class="savebar"><button class="btn" type="submit" id="nsgo">Create submission</button><span class="err" id="nserr"></span></div></section></form>`;
+  const box = $('#ncards'); let n = 0;
+  const addCard = () => {
+    n++; const el = document.createElement('section'); el.className = 'panel ed ncard';
+    el.innerHTML = `<div class="edhead"><h2>${esc(cap(C.item))} <span data-num></span></h2><button type="button" class="btn ghost small del" data-rm>Remove</button></div>` +
+      `<div class="g2"><label class="f"><span>${esc(cap(C.item))} name</span><input type="text" data-k="name" maxlength="120" placeholder="e.g. Charizard — Base Set 1999"></label>` +
+      `<label class="f"><span>Value <span class="muted">(optional)</span></span><input type="text" data-k="value" inputmode="decimal" placeholder="e.g. 300"></label></div>` +
+      (menu.svc.length
+        ? `<label class="f">Service<select data-k="svc"><option value="">Choose a service</option>${(() => { let g = null, h = ''; menu.svc.forEach((s, i) => { if (s.group !== g) { if (g !== null) h += '</optgroup>'; g = s.group; h += `<optgroup label="${esc(g || 'Services')}">`; } h += `<option value="${i}">${esc(s.label)}</option>`; }); return h + (g !== null ? '</optgroup>' : ''); })()}</select></label>` +
+          (menu.adds.length ? `<div class="f" data-addw><b>Additional services</b>${menu.adds.map((a, i) => `<label class="sw compact"><input type="checkbox" data-add="${i}"><span>${esc(a.label)} (+$${a.price})</span></label>`).join('')}</div>` : '')
+        : `<div class="g2"><label class="f">Service<input type="text" data-k="svctext" maxlength="200" placeholder="What needs to be done"></label><label class="f">Price<input type="text" data-k="svcprice" inputmode="decimal" placeholder="e.g. 20"></label></div>`) +
+      `<label class="f"><span>Notes <span class="muted">(optional)</span></span><textarea data-k="notes" rows="2" style="min-height:64px" placeholder="Condition, what the customer asked for"></textarea></label>` +
+      `<p class="muted" data-price style="margin:0"></p>`;
+    box.appendChild(el);
+    $('[data-rm]', el).onclick = () => { if ($$('.ncard', box).length > 1) { el.remove(); recalc(); } };
+    $$('select, input', el).forEach(i => i.addEventListener('input', recalc));
+    $$('select, input', el).forEach(i => i.addEventListener('change', recalc));
+    recalc(); $('[data-k="name"]', el).focus();
+  };
+  const recalc = () => {
+    let total = 0; const seen = {};
+    $$('.ncard', box).forEach((el, i) => {
+      $('[data-num]', el).textContent = i + 1;
+      const sel = $('[data-k="svc"]', el), out = $('[data-price]', el);
+      if (!sel) { const pr = Number(($('[data-k="svcprice"]', el).value || '').replace(/[$,]/g, '')) || 0; total += pr; out.textContent = pr ? 'Price: $' + pr.toFixed(2) : ''; return; }
+      const s = menu.svc[sel.value]; const aw = $('[data-addw]', el);
+      if (aw) { aw.hidden = !s || s.solo; if (!s || s.solo) $$('[data-add]', el).forEach(x => { x.checked = false; }); }
+      if (!s) { out.textContent = ''; return; }
+      let p = s.price; if (s.solo && s.next != null && seen[s.key]) p = s.next; if (s.solo) seen[s.key] = 1;
+      const extra = $$('[data-add]:checked', el).reduce((a, x) => a + menu.adds[x.dataset.add].price, 0);
+      total += p + extra; out.textContent = `Price: $${(p + extra).toFixed(2)}${s.solo && s.next != null && p === s.next ? ' (additional card)' : ''}`;
+    });
+    $('#nstotal').textContent = '$' + total.toFixed(2);
+  };
+  $('#addcard').onclick = addCard; addCard();
+  $('#nsf').onsubmit = e => {
+    e.preventDefault(); const f = e.target, err = $('#nserr'); err.textContent = '';
+    const cards = [];
+    for (const [i, el] of $$('.ncard', box).entries()) {
+      const name = $('[data-k="name"]', el).value.trim(), sel = $('[data-k="svc"]', el);
+      let service = '';
+      if (sel) { const s = menu.svc[sel.value]; if (s) service = s.value + (s.solo ? '' : $$('[data-add]:checked', el).map(x => ` + ${menu.adds[x.dataset.add].label} ($${menu.adds[x.dataset.add].price})`).join('')); }
+      else { const t = $('[data-k="svctext"]', el).value.trim(), pr = $('[data-k="svcprice"]', el).value.trim().replace(/[$,]/g, ''); if (t) service = pr ? `${t} ($${pr})` : t; }
+      if (!name) { err.textContent = `${cap(C.item)} ${i + 1} needs a name.`; return; }
+      if (!service) { err.textContent = `Choose a service for ${C.item} ${i + 1}.`; return; }
+      cards.push({ name, value: $('[data-k="value"]', el).value.trim(), service, notes: $('[data-k="notes"]', el).value.trim() });
+    }
+    const btn = $('#nsgo');
+    guarded(btn, async () => {
+      const d = await api({ action: 'newSubmission', customer: { name: f.elements.cname.value, email: f.elements.cemail.value, phone: f.elements.cphone.value, delivery: f.elements.cdel.value, address: f.elements.caddr.value },
+        cards, emailCustomer: $('#nsemail').checked, agreed: $('#nsterms').checked });
+      ALL = null; LIST = null; take(d); toast(`Submission ${d.created} created`); location.hash = '#' + encodeURIComponent(d.order.id);
+    });
+  };
+}
+
+/* ---------- uploads ---------- */
+function shrink(file){
+  return new Promise(resolve => {
+    if (!/^image\/jpeg$/.test(file.type) || file.size < 1.5e6) return resolve(file);
+    const img = new Image(), u = URL.createObjectURL(file);
+    img.onload = () => { const s = Math.min(1, 2400 / Math.max(img.width, img.height)); if (s === 1) { URL.revokeObjectURL(u); return resolve(file); }
+      const cv = document.createElement('canvas'); cv.width = Math.round(img.width * s); cv.height = Math.round(img.height * s);
+      cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(u);
+      cv.toBlob(b => resolve(b ? new File([b], 'photo.jpg', { type: 'image/jpeg' }) : file), 'image/jpeg', 0.9); };
+    img.onerror = () => { URL.revokeObjectURL(u); resolve(file); };
+    img.src = u;
+  });
+}
+async function upload(file){
+  if (!C.cloudinaryCloud || !C.cloudinaryPreset) throw new Error('Photo uploads aren’t set up — add Cloudinary to CONFIG.');
+  const fd = new FormData(); fd.append('file', await shrink(file)); fd.append('upload_preset', C.cloudinaryPreset); fd.append('folder', 'intake/' + O.ref);
+  const res = await fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(C.cloudinaryCloud) + '/image/upload', { method: 'POST', body: fd });
+  const d = await res.json();
+  if (!d.secure_url) throw new Error((d.error && d.error.message) || 'Upload failed');
+  return d.secure_url;
+}
+
+/* ---------- routing ---------- */
+function route(){
+  if (!PIN) return showPin();
+  const h = location.hash.slice(1);
+  if (h === 'customers') { window.scrollTo(0, 0); return showCustomers(); }
+  if (h.indexOf('customer=') === 0) { window.scrollTo(0, 0); return showCustomer(decodeURIComponent(h.slice(9))); }
+  if (h === 'cards') { window.scrollTo(0, 0); return showCards(); }
+  if (h === 'new' || h.indexOf('new=') === 0) { window.scrollTo(0, 0); return showNew(h.length > 4 ? decodeURIComponent(h.slice(4)) : ''); }
+  if (h === 'site' || h.indexOf('site=') === 0) { const sub = h.slice(5); if (sub && SUB !== sub) window.scrollTo(0, 0); return showSite(SUBS.some(x => x[0] === sub) ? sub : (sub ? 'status' : SUB)); }
+  setNav('orders');
+  const [id, num] = h.split('/').map(decodeURIComponent);
+  if (id && O && O.id === id && num !== undefined && O.items.some(x => String(x.num) === num)) { VIEW.num = num; window.scrollTo(0, 0); render(); }
+  else if (id && O && O.id === id && num === undefined && VIEW.num != null) { VIEW.num = null; render(); }
+  else if (id) loadOrder(id, num); else if (LIST) renderList(); else loadList();
+}
+window.addEventListener('hashchange', () => { if (!location.hash) LIST = null; route(); });
+window.addEventListener('hashchange', e => { const old = (e.oldURL.split('#')[1] || ''); if (!old || old === 'customers' || old === 'cards' || old.indexOf('customer=') === 0) BACKTO = old; });
+route();
+})();
+</script>
+</body>
+</html>
