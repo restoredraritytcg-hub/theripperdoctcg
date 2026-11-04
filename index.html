@@ -21,13 +21,13 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v8',   // shown in the footer — bump on every upload
+  build: 'rd-v11',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
     endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
-    cloudinaryCloud: '',     // TODO: RipperDoc's Cloudinary cloud name
-    cloudinaryPreset: ''     // TODO: RipperDoc's unsigned upload preset
+    cloudinaryCloud: 'oobgsfee',
+    cloudinaryPreset: 'rpbeyooz'
   },
 
   /* ─── Website Settings (owner edits these in the Google Sheet) ─────
@@ -398,11 +398,11 @@ const CONFIG = {
 
   /* Terms & Conditions and Waiver of Liability — built from the template terms,
      adapted for RipperDoc (turnaround tiers, assessments, slab services, courier hand-offs, grading support).
-     Draft for the owner to review; not legal advice. TODO: effective date, state/county in Section 30, and confirm the
+     Draft for the owner to review; not legal advice. Effective date set Nov 4 2026. Section 30 set to Florida (county not named). Still to confirm with RipperDoc: the
      30-day redo window, 7-day claims window, $5/card/month storage after 30 days and 90-day abandonment. */
   terms: {
     "title": "Terms &amp; Conditions and Waiver of Liability",
-    "effectiveDate": "TODO — set on launch day",
+    "effectiveDate": "November 4, 2026",
     "intro": [
       "Please read carefully before submitting your request.",
       "These Terms &amp; Conditions and Waiver of Liability (“Terms”) are an agreement between you and {business} (“we,” “us”). They apply to every card you submit for assessment or service, however it reaches us.",
@@ -642,7 +642,7 @@ const CONFIG = {
         "h": "30. Disputes &amp; Governing Law",
         "p": [
           "If you have a concern, please contact us first; we will try in good faith to resolve it informally within 30 days.",
-          "These Terms are governed by the laws of the state in which {business} is based, without regard to conflict-of-law rules. Any dispute not resolved informally will be brought only in the courts located in the county in which {business} is based (including small claims court), and you consent to that venue."
+          "These Terms are governed by the laws of the State of Florida, without regard to conflict-of-law rules. Any dispute not resolved informally will be brought only in the state courts of Florida located in the county in which {business} is based (including small claims court), and you consent to that venue."
         ]
       },
       {
