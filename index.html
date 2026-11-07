@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v16',   // shown in the footer — bump on every upload
+  build: 'rd-v17',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3220,9 +3220,12 @@ let resetTerms = () => {};
     submitBtn.disabled = true; submitBtn.textContent = 'Submitting…';
     try{
       const response = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(record) });
-      const result = await response.json();
+      const rawText = await response.text();
+      let result;
+      try { result = JSON.parse(rawText); }
+      catch (_) { const e = new Error(`The backend replied with a web page instead of data (HTTP ${response.status}): ${rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)}`); e.detail = true; throw e; }
       if(result && result.paused){ setMsg(formMsg, esc(C.form.pausedMessage || 'Submissions were just paused — please check back soon.'), 'err'); return; }
-      if(!result || !result.success) throw new Error((result && result.error) || 'submit failed');
+      if(!result || !result.success){ const e = new Error((result && result.error) || 'The backend said the save failed but gave no reason.'); e.detail = true; throw e; }
       const ref = result.ref || id;
       const count = items.length > 1 ? `${items.length} ${WD.items}` : `your ${WD.item}`;
       const sk = (email ? 'successEmail' : 'successPhone') + (dOpt.hand && M[(email ? 'successEmail' : 'successPhone') + 'Hand'] ? 'Hand' : '');
@@ -3234,7 +3237,8 @@ let resetTerms = () => {};
       container.innerHTML = ''; Object.keys(entries).forEach(k => delete entries[k]); counter = 0; addEntry();
     }catch(err){
       console.error('Submission error:', err);
-      setMsg(formMsg, T(M.error), 'err');
+      const why = err && err.detail ? err.message : (err && err.message ? 'Couldn’t reach the backend: ' + err.message : '');
+      setMsg(formMsg, T(M.error) + (why ? `<br><small class="err-detail">Details for the site owner: ${esc(why)}</small>` : ''), 'err');
     }finally{
       submitBtn.disabled = false; submitBtn.innerHTML = SUBMIT_LABEL;
     }
