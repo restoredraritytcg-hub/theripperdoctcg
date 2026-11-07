@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v15',   // shown in the footer — bump on every upload
+  build: 'rd-v16',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3516,7 +3516,7 @@ let resetTerms = () => {};
 })();
 </script>
 <!-- ===== Card lookup: suggests Pokémon cards as you type a card name =====
-     Uses the same card catalog as CardVestIQ (pokemontcg.io). Free, no key.
+     Uses the same card catalog as CardVestIQ (pokemontcg.io), with TCGdex as a free backup. No keys.
      Customers can still type any card that isn't listed (sports cards, customs, etc.).
      To turn it off, set on: false. To use another catalog later, change api + toCard below. -->
 <style>
@@ -3536,40 +3536,73 @@ let resetTerms = () => {};
   const CL = {
     on: true,
     selector: 'input[id^="f-card-"]',
-    api: 'https://api.pokemontcg.io/v2/cards',
+    api: 'https://api.pokemontcg.io/v2/cards',     // main catalog (same as CardVestIQ)
+    backup: 'https://api.tcgdex.net/v2/en',         // used when the main one is slow, busy or down
     minChars: 3,
-    max: 12
+    max: 12,
+    timeoutMs: 4000
   };
   if (!CL.on) return;
   const cache = {}, $box = document.createElement('div');
   $box.className = 'cl-box'; $box.hidden = true;
   $box.innerHTML = '<ul class="cl-list" role="listbox" id="cl-list"></ul><div class="cl-foot">Pokémon cards · not listed? Just keep typing</div>';
   const $list = $box.firstChild;
-  let input = null, items = [], active = -1, timer = 0, seq = 0;
+  let input = null, items = [], active = -1, timer = 0, slowTimer = 0, seq = 0, sets = null;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const words = text => text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(Boolean).slice(0, 5);
+  const keyOf = text => words(text).join(' ');
   // "charizard base 4" -> (name:charizard* OR set.name:charizard*) (name:base* OR set.name:base*) (number:4 OR set.printedTotal:4)
-  function query(text){
-    const words = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(Boolean).slice(0, 5);
-    if (!words.length) return '';
-    return words.map(w => /^\d+$/.test(w)
-      ? `(number:${w} OR set.printedTotal:${w})`
-      : `(name:${w}* OR set.name:${w}*)`).join(' ');
+  const query = ws => ws.map(w => /^\d+$/.test(w) ? `(number:${w} OR set.printedTotal:${w})` : `(name:${w}* OR set.name:${w}*)`).join(' ');
+  // does a card match every typed word? (used to filter results we already have while the next search runs)
+  const fits = (c, ws) => ws.every(w => /^\d+$/.test(w) ? (c.num === w || c.total === w) : c.hay.some(h => h.startsWith(w)));
+  function card(name, setName, num, total, year, rarity, img){
+    const n = num ? (total ? `${num}/${total}` : `#${num}`) : '';
+    return { label: `${name} — ${setName || ''}${n ? ' ' + n : ''}`.trim(), name, sub: [setName, n, year, rarity].filter(Boolean).join(' · '), img,
+      num: String(num || '').replace(/^0+/, ''), total: String(total || ''), hay: words(`${name} ${setName || ''}`) };
   }
-  function toCard(c){
-    const s = c.set || {}, num = c.number ? (s.printedTotal ? `${c.number}/${s.printedTotal}` : `#${c.number}`) : '';
-    const year = (s.releaseDate || '').slice(0, 4);
-    return { label: `${c.name} — ${s.name || ''}${num ? ' ' + num : ''}`.trim(), name: c.name,
-      sub: [s.name, num, year, c.rarity].filter(Boolean).join(' · '), img: c.images && c.images.small };
+  async function getJSON(url){
+    const ctl = window.AbortController ? new AbortController() : null, t = setTimeout(() => ctl && ctl.abort(), CL.timeoutMs);
+    try { const r = await fetch(url, ctl ? { signal: ctl.signal } : {}); if (!r.ok) throw new Error('lookup ' + r.status); return await r.json(); }
+    finally { clearTimeout(t); }
+  }
+  async function fromMain(ws){
+    const d = await getJSON(`${CL.api}?q=${encodeURIComponent(query(ws))}&pageSize=${CL.max}&orderBy=-set.releaseDate&select=id,name,number,rarity,set,images`);
+    return (d.data || []).map(c => { const st = c.set || {}; return card(c.name, st.name, c.number, st.printedTotal, (st.releaseDate || '').slice(0, 4), c.rarity, c.images && c.images.small); });
+  }
+  async function fromBackup(ws){
+    if (!sets) { try { sets = JSON.parse(localStorage.getItem('cl-sets') || 'null'); } catch (_) {} }
+    if (!sets || !sets.t || Date.now() - sets.t > 7 * 864e5) {
+      const list = await getJSON(`${CL.backup}/sets`);
+      sets = { t: Date.now(), m: {} }; list.forEach(x => { sets.m[x.id] = [x.name, x.cardCount && x.cardCount.official]; });
+      try { localStorage.setItem('cl-sets', JSON.stringify(sets)); } catch (_) {}
+    }
+    const nameWord = ws.find(w => !/^\d+$/.test(w)); if (!nameWord) return [];
+    const d = await getJSON(`${CL.backup}/cards?name=${encodeURIComponent(nameWord)}&pagination:itemsPerPage=120`);
+    return (Array.isArray(d) ? d : []).slice().reverse().map(c => {
+      const sid = String(c.id).slice(0, Math.max(0, String(c.id).length - String(c.localId).length - 1)), st = sets.m[sid] || [];
+      return card(c.name, st[0], c.localId, st[1], '', '', c.image ? c.image + '/low.webp' : '');
+    }).filter(c => fits(c, ws)).slice(0, CL.max);
   }
   async function search(text){
-    const q = query(text); if (!q) return [];
-    if (cache[q]) return cache[q];
-    const url = `${CL.api}?q=${encodeURIComponent(q)}&pageSize=${CL.max}&orderBy=-set.releaseDate&select=id,name,number,rarity,set,images`;
-    const r = await fetch(url);
-    if (!r.ok) throw new Error('lookup ' + r.status);
-    const d = await r.json();
-    return (cache[q] = (d.data || []).map(toCard));
+    const ws = words(text), k = ws.join(' '); if (!ws.length) return [];
+    if (cache[k]) return cache[k];
+    let res;
+    try { res = await fromMain(ws); }
+    catch (e) {
+      // main catalog too slow: go straight to the backup. Busy (429) or erroring: retry once, then the backup.
+      if (e.name === 'AbortError') res = await fromBackup(ws);
+      else { try { await new Promise(r => setTimeout(r, 800)); res = await fromMain(ws); } catch (e2) { res = await fromBackup(ws); } }
+    }
+    return (cache[k] = res);
+  }
+  // results we already have for an earlier, shorter search that still match
+  function quick(text){
+    const ws = words(text); let best = null;
+    Object.keys(cache).forEach(k => { if (ws.join(' ').startsWith(k) && (!best || k.length > best.length)) best = k; });
+    if (!best) return null;
+    const r = cache[best].filter(c => fits(c, ws));
+    return { list: r, complete: cache[best].length < CL.max };
   }
   function place(){
     if (!input || $box.hidden) return;
@@ -3583,12 +3616,13 @@ let resetTerms = () => {};
     $list.style.maxHeight = Math.max(140, Math.min(320, (up ? above : below) - 40)) + 'px';
     $box.style.top = up ? Math.max(8, r.top - 4 - $box.offsetHeight) + 'px' : (r.bottom + 4) + 'px';
   }
-  function close(){ $box.hidden = true; active = -1; if (input) { input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); } }
+  function close(){ $box.hidden = true; active = -1; clearTimeout(slowTimer); if (input) { input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); } }
   function show(html){ $list.innerHTML = html; if (!$box.isConnected) document.body.appendChild($box); $box.hidden = false; input.setAttribute('aria-expanded', 'true'); place(); }
+  const msg = t => show(`<li class="cl-msg" role="status">${t}</li>`);
   function render(){
     if (!items.length) { close(); return; }   // nothing matched (e.g. a sports card): stay out of the way
     show(items.map((c, i) => `<li class="cl-opt" role="option" id="cl-opt-${i}" data-i="${i}" aria-selected="${i === active}">` +
-      (c.img ? `<img src="${esc(c.img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '') + `<span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></span></li>`).join(''));
+      (c.img ? `<img src="${esc(c.img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '<img alt="">') + `<span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></span></li>`).join(''));
   }
   function setActive(i){
     active = (i + items.length) % items.length;
@@ -3606,18 +3640,24 @@ let resetTerms = () => {};
     el.setAttribute('autocomplete', 'off'); el.setAttribute('role', 'combobox'); el.setAttribute('aria-autocomplete', 'list');
     el.setAttribute('aria-controls', 'cl-list'); el.setAttribute('aria-expanded', 'false');
   }
-  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches(CL.selector)) attach(e.target); });
-  document.addEventListener('input', e => {
-    const el = e.target; if (!el.matches || !el.matches(CL.selector)) return;
-    attach(el); input = el; clearTimeout(timer);
+  function lookup(el, delay){
+    attach(el); input = el; clearTimeout(timer); clearTimeout(slowTimer);
     const text = el.value.trim();
-    if (el.dataset.clPicked === el.value || text.length < CL.minChars) { close(); return; }
+    if (el.dataset.clPicked === el.value || words(text).join('').length < CL.minChars) { close(); return; }
+    const my = ++seq, k = keyOf(text);
+    if (cache[k]) { items = cache[k]; active = -1; render(); return; }
+    const q = quick(text);
+    if (q && q.list.length) { items = q.list; active = -1; render(); if (q.complete) return; }   // instant results while the search runs
     timer = setTimeout(async () => {
-      const my = ++seq;
-      try { const res = await search(text); if (my !== seq || input !== el) return; items = res; active = -1; render(); }
-      catch (err) { if (my === seq) close(); }   // lookup down or offline: the field keeps working as plain text
-    }, 300);
-  });
+      if (my !== seq) return;
+      if (!q || !q.list.length) { msg('Searching Pokémon cards…'); slowTimer = setTimeout(() => { if (my === seq && !items.length) msg('Still searching… you can keep typing'); }, 3500); }
+      if (!q || !q.list.length) items = [];
+      try { const res = await search(text); if (my !== seq || input !== el) return; clearTimeout(slowTimer); items = res; active = -1; render(); }
+      catch (err) { if (my === seq) { clearTimeout(slowTimer); items = []; msg('Card lookup isn’t responding right now — just type the card in.'); setTimeout(() => { if (my === seq) close(); }, 3000); } }
+    }, delay);
+  }
+  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches(CL.selector)) { attach(e.target); if (e.target.value.trim()) lookup(e.target, 0); } });
+  document.addEventListener('input', e => { const el = e.target; if (el.matches && el.matches(CL.selector)) lookup(el, 350); });
   document.addEventListener('keydown', e => {
     if (e.target !== input || $box.hidden || !items.length) { if (e.key === 'Escape') close(); return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
