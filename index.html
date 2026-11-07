@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v11',   // shown in the footer — bump on every upload
+  build: 'rd-v12',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3468,6 +3468,124 @@ let resetTerms = () => {};
       clearTimeout(timer); start(d);
     })
     .catch(() => { clearTimeout(timer); start(cached); });
+})();
+</script>
+<!-- ===== Card lookup: suggests Pokémon cards as you type a card name =====
+     Uses the same card catalog as CardVestIQ (pokemontcg.io). Free, no key.
+     Customers can still type any card that isn't listed (sports cards, customs, etc.).
+     To turn it off, set on: false. To use another catalog later, change api + toCard below. -->
+<style>
+  .cl-box{position:fixed;z-index:2147483000;background:var(--panel,#fff);color:var(--text,#111);border:1px solid var(--line,#ccc);
+    border-radius:10px;box-shadow:0 12px 32px rgba(0,0,0,.35);overflow:hidden;font:inherit;font-size:14px;text-align:left}
+  .cl-list{max-height:320px;overflow-y:auto;margin:0;padding:4px;list-style:none}
+  .cl-opt{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:8px;cursor:pointer;line-height:1.25}
+  .cl-opt[aria-selected="true"]{background:color-mix(in srgb,var(--accent,#2dd4bf) 22%,transparent)}
+  .cl-opt img{width:34px;height:47px;object-fit:cover;border-radius:3px;flex:none;background:var(--line,#ddd)}
+  .cl-opt b{display:block;font-weight:600}
+  .cl-opt small{display:block;color:var(--muted,#666);font-size:12.5px}
+  .cl-foot{padding:6px 12px 8px;color:var(--muted,#666);font-size:12px;border-top:1px solid var(--line,#ddd)}
+  .cl-msg{padding:10px 12px;color:var(--muted,#666)}
+</style>
+<script>
+(function(){
+  const CL = {
+    on: true,
+    selector: 'input[id^="f-card-"]',
+    api: 'https://api.pokemontcg.io/v2/cards',
+    minChars: 3,
+    max: 12
+  };
+  if (!CL.on) return;
+  const cache = {}, $box = document.createElement('div');
+  $box.className = 'cl-box'; $box.hidden = true;
+  $box.innerHTML = '<ul class="cl-list" role="listbox" id="cl-list"></ul><div class="cl-foot">Pokémon cards · not listed? Just keep typing</div>';
+  const $list = $box.firstChild;
+  let input = null, items = [], active = -1, timer = 0, seq = 0;
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  // "charizard base 4" -> (name:charizard* OR set.name:charizard*) (name:base* OR set.name:base*) (number:4 OR set.printedTotal:4)
+  function query(text){
+    const words = text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(Boolean).slice(0, 5);
+    if (!words.length) return '';
+    return words.map(w => /^\d+$/.test(w)
+      ? `(number:${w} OR set.printedTotal:${w})`
+      : `(name:${w}* OR set.name:${w}*)`).join(' ');
+  }
+  function toCard(c){
+    const s = c.set || {}, num = c.number ? (s.printedTotal ? `${c.number}/${s.printedTotal}` : `#${c.number}`) : '';
+    const year = (s.releaseDate || '').slice(0, 4);
+    return { label: `${c.name} — ${s.name || ''}${num ? ' ' + num : ''}`.trim(), name: c.name,
+      sub: [s.name, num, year, c.rarity].filter(Boolean).join(' · '), img: c.images && c.images.small };
+  }
+  async function search(text){
+    const q = query(text); if (!q) return [];
+    if (cache[q]) return cache[q];
+    const url = `${CL.api}?q=${encodeURIComponent(q)}&pageSize=${CL.max}&orderBy=-set.releaseDate&select=id,name,number,rarity,set,images`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('lookup ' + r.status);
+    const d = await r.json();
+    return (cache[q] = (d.data || []).map(toCard));
+  }
+  function place(){
+    if (!input || $box.hidden) return;
+    const r = input.getBoundingClientRect(), vh = (window.visualViewport && visualViewport.height) || innerHeight;
+    if (r.bottom < 0 || r.top > vh) { $box.style.visibility = 'hidden'; return; }
+    $box.style.visibility = '';
+    const w = Math.min(Math.max(r.width, 300), innerWidth - 16);
+    $box.style.width = w + 'px';
+    $box.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px';
+    const below = vh - r.bottom - 12, above = r.top - 12, up = below < 200 && above > below;
+    $list.style.maxHeight = Math.max(140, Math.min(320, (up ? above : below) - 40)) + 'px';
+    $box.style.top = up ? Math.max(8, r.top - 4 - $box.offsetHeight) + 'px' : (r.bottom + 4) + 'px';
+  }
+  function close(){ $box.hidden = true; active = -1; if (input) { input.setAttribute('aria-expanded', 'false'); input.removeAttribute('aria-activedescendant'); } }
+  function show(html){ $list.innerHTML = html; if (!$box.isConnected) document.body.appendChild($box); $box.hidden = false; input.setAttribute('aria-expanded', 'true'); place(); }
+  function render(){
+    if (!items.length) { close(); return; }   // nothing matched (e.g. a sports card): stay out of the way
+    show(items.map((c, i) => `<li class="cl-opt" role="option" id="cl-opt-${i}" data-i="${i}" aria-selected="${i === active}">` +
+      (c.img ? `<img src="${esc(c.img)}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">` : '') + `<span><b>${esc(c.name)}</b><small>${esc(c.sub)}</small></span></li>`).join(''));
+  }
+  function setActive(i){
+    active = (i + items.length) % items.length;
+    [...$list.children].forEach((li, j) => li.setAttribute('aria-selected', String(j === active)));
+    const li = $list.children[active]; if (li) { li.scrollIntoView({ block: 'nearest' }); input.setAttribute('aria-activedescendant', li.id); }
+  }
+  function pick(i){
+    const c = items[i]; if (!c || !input) return;
+    input.value = c.label.slice(0, Number(input.maxLength) > 0 ? input.maxLength : 200);
+    input.dataset.clPicked = input.value; close(); clearTimeout(timer); seq++;
+    input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  function attach(el){
+    if (el.dataset.cl) return; el.dataset.cl = '1';
+    el.setAttribute('autocomplete', 'off'); el.setAttribute('role', 'combobox'); el.setAttribute('aria-autocomplete', 'list');
+    el.setAttribute('aria-controls', 'cl-list'); el.setAttribute('aria-expanded', 'false');
+  }
+  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches(CL.selector)) attach(e.target); });
+  document.addEventListener('input', e => {
+    const el = e.target; if (!el.matches || !el.matches(CL.selector)) return;
+    attach(el); input = el; clearTimeout(timer);
+    const text = el.value.trim();
+    if (el.dataset.clPicked === el.value || text.length < CL.minChars) { close(); return; }
+    timer = setTimeout(async () => {
+      const my = ++seq;
+      try { const res = await search(text); if (my !== seq || input !== el) return; items = res; active = -1; render(); }
+      catch (err) { if (my === seq) close(); }   // lookup down or offline: the field keeps working as plain text
+    }, 300);
+  });
+  document.addEventListener('keydown', e => {
+    if (e.target !== input || $box.hidden || !items.length) { if (e.key === 'Escape') close(); return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(active - 1); }
+    else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); pick(active); }
+    else if (e.key === 'Escape' || e.key === 'Tab') close();
+  });
+  $list.addEventListener('mousedown', e => e.preventDefault());   // keep focus in the field
+  $list.addEventListener('click', e => { const li = e.target.closest('.cl-opt'); if (li) pick(+li.dataset.i); });
+  document.addEventListener('focusout', e => { if (e.target === input) setTimeout(() => { if (document.activeElement !== input) close(); }, 150); });
+  document.addEventListener('mousedown', e => { if (!$box.hidden && e.target !== input && !$box.contains(e.target)) close(); });
+  addEventListener('resize', place); addEventListener('scroll', place, true);
+  if (window.visualViewport) visualViewport.addEventListener('resize', place);
 })();
 </script>
 </body>
