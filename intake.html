@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
   business: 'RipperDoc TCG',
-  build: 'rd-intake-v2',
+  build: 'rd-intake-v3',
   endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
   cloudinaryCloud: 'oobgsfee',
   cloudinaryPreset: 'rpbeyooz',
@@ -796,8 +796,18 @@ async function showNew(key){
     $$('select, input', el).forEach(i => i.addEventListener('change', recalc));
     recalc(); $('[data-k="name"]', el).focus();
   };
+  // card-value surcharge (Code.gs CONFIG.SURCHARGE): repair services only, from the card's Value
+  const surchargeEst = (svcText, valueText) => {
+    const S = SITE && SITE.surcharge, norm = v => String(v || '').toLowerCase().replace(/[‒-―−]/g, '-').trim();
+    if (!S || !S.bands || !S.bands.length || !(S.services || []).some(n => norm(svcText).startsWith(norm(n)))) return null;
+    const m = String(valueText || '').replace(/,/g, '').match(/[0-9]+(?:\.[0-9]+)?/); if (!m) return null;
+    const v = Number(m[0]), last = S.bands[S.bands.length - 1];
+    if (v > last.upTo && S.customAbove) return { custom: true, max: last.upTo.toLocaleString() };
+    const b = S.bands.find(x => v <= x.upTo) || last;
+    return { amt: b.rate ? Math.ceil(Math.round(v * b.rate * 1e6) / 1e6) : 0 };
+  };
   const recalc = () => {
-    let total = 0; const seen = {};
+    let total = 0, custom = 0; const seen = {};
     $$('.ncard', box).forEach((el, i) => {
       $('[data-num]', el).textContent = i + 1;
       const sel = $('[data-k="svc"]', el), out = $('[data-price]', el);
@@ -807,9 +817,12 @@ async function showNew(key){
       if (!s) { out.textContent = ''; return; }
       let p = s.price; if (s.solo && s.next != null && seen[s.key]) p = s.next; if (s.solo) seen[s.key] = 1;
       const extra = $$('[data-add]:checked', el).reduce((a, x) => a + menu.adds[x.dataset.add].price, 0);
-      total += p + extra; out.textContent = `Price: $${(p + extra).toFixed(2)}${s.solo && s.next != null && p === s.next ? ' (additional card)' : ''}`;
+      const sur = s.solo ? null : surchargeEst(s.value, $('[data-k="value"]', el).value);
+      if (sur && sur.custom) { custom++; out.textContent = `Custom quote — card value over $${sur.max}. Set the price on the order after saving.`; return; }
+      const add = sur ? sur.amt : 0;
+      total += p + extra + add; out.textContent = `Price: $${(p + extra + add).toFixed(2)}${s.solo && s.next != null && p === s.next ? ' (additional card)' : ''}${add ? ` (includes $${add} value surcharge)` : ''}`;
     });
-    $('#nstotal').textContent = '$' + total.toFixed(2);
+    $('#nstotal').textContent = '$' + total.toFixed(2) + (custom ? ` + ${custom} custom quote${custom > 1 ? 's' : ''}` : '');
   };
   $('#addcard').onclick = addCard; addCard();
   $('#nsf').onsubmit = e => {
