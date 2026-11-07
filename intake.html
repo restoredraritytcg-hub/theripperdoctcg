@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
   business: 'RipperDoc TCG',
-  build: 'rd-intake-v3',
+  build: 'rd-intake-v4',
   endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
   cloudinaryCloud: 'oobgsfee',
   cloudinaryPreset: 'rpbeyooz',
@@ -322,7 +322,8 @@ async function loadOrder(id, num){
   try { const d = await api({ action: 'order', id }); take(d); render(); }
   catch (err) { if (PIN) app.innerHTML = `<button class="btn ghost small back" onclick="location.hash=''">All orders</button><p class="err">${esc(err.message)}</p>`; }
 }
-function take(d){ ALL = null; O = d.order; STAGES = d.stages || STAGES; STAGE_EMAILS = d.stageEmails || STAGE_EMAILS; }
+let SURCH = null;
+function take(d){ ALL = null; O = d.order; STAGES = d.stages || STAGES; STAGE_EMAILS = d.stageEmails || STAGE_EMAILS; if (d.surcharge !== undefined) SURCH = d.surcharge; }
 function render(){ if (VIEW.num != null && O.items.some(x => String(x.num) === VIEW.num)) renderCard(); else renderOrder(); }
 function statusCtl(it){
   const st = it.status, opts = (STAGES.indexOf(st) === -1 ? [st] : []).concat(STAGES);
@@ -396,14 +397,18 @@ function cardHtml(it, single){
   const strip = (kind, list) => `<div class="strip">${list.map(u => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${kind} photo" loading="lazy"></a><button class="x" data-rm="${kind}" data-url="${esc(u)}" aria-label="Remove ${kind} photo">×</button></span>`).join('')}` +
     `<label class="add" data-add="${kind}">Add ${kind} photos<input type="file" accept="image/*,.heic,.heif" multiple hidden></label></div>`;
   return `<section class="panel card" data-num="${esc(it.num)}" aria-label="${esc(cap(C.item))} ${esc(it.num)}"><div class="chead"><h3>${esc(cap(C.item))} ${esc(it.num)}: ${esc(it.name || 'Unnamed')}${single ? '' : `<a class="openlink" href="#${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}">Open on its own</a>`}</h3>${statusCtl(it)}</div>` +
-    `<dl class="facts"><dt>Service</dt><dd>${esc(it.service || '—')}</dd>${it.value ? `<dt>Value</dt><dd>${esc(it.value)}</dd>` : ''}${it.notes ? `<dt>Customer notes</dt><dd>${esc(it.notes)}</dd>` : ''}` +
+    `<dl class="facts"><dt>Service</dt><dd>${esc(it.service || '—')}</dd>${it.value ? `<dt>Declared value</dt><dd>${esc(it.value)}</dd>` : ''}${it.notes ? `<dt>Customer notes</dt><dd>${esc(it.notes)}</dd>` : ''}` +
     `<dt>Quote</dt><dd><b>${/cancel/i.test(it.status) ? 'Not charged' : it.quote == null ? 'Needs a price' : money(it.quote)}</b> <span class="muted">${esc(it.breakdown)}</span></dd></dl>` +
     (cust.length ? `<div class="ph"><b>Customer photos</b><div class="strip">${cust.map(([l, u]) => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${esc(l)}" loading="lazy"></a><span>${esc(l)}</span></span>`).join('')}</div></div>` : '') +
     `<div class="ph"><b>Before photos</b>${strip('before', it.before)}</div>` +
     `<div class="ph"><b>After photos</b>${strip('after', it.after)}</div>` +
     `<div class="row2"><label><b style="font-size:14px">Intake notes</b> <span class="saved" data-saved hidden>Saved</span><textarea data-notes placeholder="Condition on arrival, what you found, what you did">${esc(it.intakeNotes)}</textarea></label>` +
-    `<label><b style="font-size:14px">Price override</b><input type="text" data-ov inputmode="decimal" placeholder="Use quote" value="${esc(it.override)}"><span class="muted" style="font-size:13px">Your price for this ${esc(C.item)}. Blank uses the quote.</span></label></div></section>`;
+    `<label><b style="font-size:14px">Price override</b><input type="text" data-ov inputmode="decimal" placeholder="Use quote" value="${esc(it.override)}"><span class="muted" style="font-size:13px">Your price for this ${esc(C.item)}. Blank uses the quote.</span></label></div>` +
+    (needsRv(it) ? `<div class="row2"><label><b style="font-size:14px">Value after restoration</b><input type="text" data-rv inputmode="decimal" placeholder="e.g. 500" value="${esc(it.restoredValue)}"><span class="muted" style="font-size:13px">Confirm it at assessment: recent sales of this ${esc(C.item)} in the condition you expect after the work. Sets the repair surcharge.</span></label><span></span></div>` : '') +
+    `</section>`;
 }
+// repair services with a value surcharge (Code.gs SURCHARGE) get a Value after restoration box
+const needsRv = it => { const S = SURCH || (SITE && SITE.surcharge); return !!(S && (S.services || []).some(n => String(it.service || '').toLowerCase().startsWith(String(n).toLowerCase()))) || !!String(it.restoredValue || '').trim(); };
 function wireCard(it){
   const el = $(`.card[data-num="${CSS.escape(String(it.num))}"]`);
   $$('.add', el).forEach(lab => $('input', lab).addEventListener('change', async e => {
@@ -421,6 +426,10 @@ function wireCard(it){
   const ov = $('[data-ov]', el); let lastOv = ov.value;
   const setOv = () => { if (ov.value.trim() === lastOv.trim()) return; lastOv = ov.value; save({ action: 'override', id: O.id, num: it.num, value: ov.value.trim() }, ov.value.trim() ? 'Price set' : 'Back to the quote'); };
   ov.addEventListener('change', setOv); ov.addEventListener('keydown', e => { if (e.key === 'Enter') ov.blur(); });
+  const rv = $('[data-rv]', el);
+  if (rv) { let lastRv = rv.value;
+    rv.addEventListener('change', () => { if (rv.value.trim() === lastRv.trim()) return; lastRv = rv.value; save({ action: 'restoredValue', id: O.id, num: it.num, value: rv.value.trim() }, rv.value.trim() ? 'Value saved — quote updated' : 'Value cleared'); });
+    rv.addEventListener('keydown', e => { if (e.key === 'Enter') rv.blur(); }); }
 }
 async function save(body, done){
   try { const d = await api(body); take(d); const y = scrollY; render(); scrollTo(0, y); toast(done); }
@@ -783,7 +792,8 @@ async function showNew(key){
     n++; const el = document.createElement('section'); el.className = 'panel ed ncard';
     el.innerHTML = `<div class="edhead"><h2>${esc(cap(C.item))} <span data-num></span></h2><button type="button" class="btn ghost small del" data-rm>Remove</button></div>` +
       `<div class="g2"><label class="f"><span>${esc(cap(C.item))} name</span><input type="text" data-k="name" maxlength="120" placeholder="e.g. Charizard — Base Set 1999"></label>` +
-      `<label class="f"><span>Value <span class="muted">(optional)</span></span><input type="text" data-k="value" inputmode="decimal" placeholder="e.g. 300"></label></div>` +
+      `<label class="f"><span>Declared value <span class="muted">(current, optional)</span></span><input type="text" data-k="value" inputmode="decimal" placeholder="e.g. 300"></label></div>` +
+      (SITE && SITE.surcharge ? `<label class="f" data-rvw hidden><span>Value after restoration <span class="muted">(sets the repair surcharge)</span></span><input type="text" data-k="rvalue" inputmode="decimal" placeholder="e.g. 500"></label>` : '') +
       (menu.svc.length
         ? `<label class="f">Service<select data-k="svc"><option value="">Choose a service</option>${(() => { let g = null, h = ''; menu.svc.forEach((s, i) => { if (s.group !== g) { if (g !== null) h += '</optgroup>'; g = s.group; h += `<optgroup label="${esc(g || 'Services')}">`; } h += `<option value="${i}">${esc(s.label)}</option>`; }); return h + (g !== null ? '</optgroup>' : ''); })()}</select></label>` +
           (menu.adds.length ? `<div class="f" data-addw><b>Additional services</b>${menu.adds.map((a, i) => `<label class="sw compact"><input type="checkbox" data-add="${i}"><span>${esc(a.label)} (+$${a.price})</span></label>`).join('')}</div>` : '')
@@ -814,10 +824,13 @@ async function showNew(key){
       if (!sel) { const pr = Number(($('[data-k="svcprice"]', el).value || '').replace(/[$,]/g, '')) || 0; total += pr; out.textContent = pr ? 'Price: $' + pr.toFixed(2) : ''; return; }
       const s = menu.svc[sel.value]; const aw = $('[data-addw]', el);
       if (aw) { aw.hidden = !s || s.solo; if (!s || s.solo) $$('[data-add]', el).forEach(x => { x.checked = false; }); }
-      if (!s) { out.textContent = ''; return; }
+      if (!s) { out.textContent = ''; const w = $('[data-rvw]', el); if (w) w.hidden = true; return; }
       let p = s.price; if (s.solo && s.next != null && seen[s.key]) p = s.next; if (s.solo) seen[s.key] = 1;
       const extra = $$('[data-add]:checked', el).reduce((a, x) => a + menu.adds[x.dataset.add].price, 0);
-      const sur = s.solo ? null : surchargeEst(s.value, $('[data-k="value"]', el).value);
+      const rvw = $('[data-rvw]', el), rvIn = $('[data-k="rvalue"]', el);
+      const isSur = !!(SITE && SITE.surcharge && (SITE.surcharge.services || []).some(n => s.value.toLowerCase().startsWith(String(n).toLowerCase())));
+      if (rvw) rvw.hidden = !isSur;
+      const sur = s.solo || !isSur ? null : surchargeEst(s.value, rvIn ? rvIn.value : '');
       if (sur && sur.custom) { custom++; out.textContent = `Custom quote — card value over $${sur.max}. Set the price on the order after saving.`; return; }
       const add = sur ? sur.amt : 0;
       total += p + extra + add; out.textContent = `Price: $${(p + extra + add).toFixed(2)}${s.solo && s.next != null && p === s.next ? ' (additional card)' : ''}${add ? ` (includes $${add} value surcharge)` : ''}`;
@@ -835,7 +848,8 @@ async function showNew(key){
       else { const t = $('[data-k="svctext"]', el).value.trim(), pr = $('[data-k="svcprice"]', el).value.trim().replace(/[$,]/g, ''); if (t) service = pr ? `${t} ($${pr})` : t; }
       if (!name) { err.textContent = `${cap(C.item)} ${i + 1} needs a name.`; return; }
       if (!service) { err.textContent = `Choose a service for ${C.item} ${i + 1}.`; return; }
-      cards.push({ name, value: $('[data-k="value"]', el).value.trim(), service, notes: $('[data-k="notes"]', el).value.trim() });
+      const rvw = $('[data-rvw]', el);
+      cards.push({ name, value: $('[data-k="value"]', el).value.trim(), restoredValue: rvw && !rvw.hidden ? $('[data-k="rvalue"]', el).value.trim() : '', service, notes: $('[data-k="notes"]', el).value.trim() });
     }
     const btn = $('#nsgo');
     guarded(btn, async () => {

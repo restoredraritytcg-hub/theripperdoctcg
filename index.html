@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v13',   // shown in the footer — bump on every upload
+  build: 'rd-v15',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -219,7 +219,7 @@ const CONFIG = {
     heading: 'Pricing',
     layout: 'cards',
     unit: '/ card',
-    intro: 'Priced per card. Pick a service, then pick your turnaround — Priority or Standard. Every card is assessed before work begins, and the final service recommendation comes after assessment.',
+    intro: 'Prices shown are <b>base prices per card</b>. Pick a service, then pick your turnaround — Priority or Standard. <b>Repair services (Minor Repair and Full Restoration) add a value surcharge</b> based on the card’s estimated value after restoration — see the surcharge table below. Every card is assessed before work begins, and the final service recommendation comes after assessment.',
     currency: '$',
     serviceGroups: true,       // group the service dropdowns by section
     notice: {
@@ -296,21 +296,31 @@ const CONFIG = {
     notes: [
       '<b>Turnaround times:</b> your card may be ready before the listed window. We aim to return it no later than the end of that window — if anything changes, we’ll contact you with an update.',
       '<b>Bulk pricing available</b> starting at 5–10 cards, depending on the service. <a href="#contact">Contact us</a> for pricing on your specific order.',
-      'Prices are per card. Shipping &amp; handling not included. Final service recommendation after assessment.'
+      'Prices shown are base prices per card. Minor Repair and Full Restoration add a value surcharge when the card’s estimated value after restoration is over $250 (see below). Shipping &amp; handling not included. Final service recommendation after assessment.'
     ],
     bulk: { bands: [] },
     surcharge: {               // card-value surcharge on repair services (same rules as Restored Rarity). MUST match SURCHARGE in Code.gs
       show: true,
-      groupLabel: 'Card value surcharge',
+      groupLabel: 'Value surcharge — added to repair base prices',
       explainer: [
-        'For cards with a card value of $250 or less, no value surcharge applies.',
-        'For repair services (Minor Repair and Full Restoration), a surcharge is added to the selected service price based on the card’s estimated value: 10% for cards between $251 and $1,500, and 12% for cards between $1,501 and $3,000, rounded up to the nearest dollar. Cards valued above $3,000 require a custom quote. Card Refresh, add-ons and assessments are never subject to a value surcharge.'
+        'For cards with an estimated value after restoration of $250 or less, no value surcharge applies.',
+        'For repair services (Minor Repair and Full Restoration), a surcharge is added to the base price based on the card’s <b>estimated value after restoration</b>: 10% for cards between $251 and $1,500, and 12% for cards between $1,501 and $3,000, rounded up to the nearest dollar. Cards valued above $3,000 require a custom quote. Card Refresh, add-ons and assessments are never subject to a value surcharge.'
       ],
       bands: [ { upTo: 250, rate: 0 }, { upTo: 1500, rate: 0.10 }, { upTo: 3000, rate: 0.12 } ],
       customAbove: true,
-      valueHeader: 'Card Value', feeHeader: 'Surcharge',
-      rateSuffix: 'of card value', freeLabel: 'No Surcharge', customLabel: 'Custom Quote',
-      note: 'Surcharges are calculated on the card’s value and rounded up to the nearest dollar.'
+      valueHeader: 'Value after restoration', feeHeader: 'Surcharge',
+      rateSuffix: 'of value after restoration', freeLabel: 'No Surcharge', customLabel: 'Custom Quote',
+      note: 'Surcharges are calculated on the card’s estimated value after restoration and rounded up to the nearest dollar.',
+      basis: {
+        title: 'How the value after restoration is determined',
+        p: [
+          'The surcharge is based on what your card is expected to be worth <b>once the work is done</b>, not what it’s worth with its current damage.',
+          'We estimate it from current market sales (comps) of the same card in the condition we expect it to be in after the service. Damage we expect to fix, like a crease or dent, is left out; wear we don’t expect to change, like whitening or edge wear, still counts.',
+          '<b>Example:</b> a creased card that also has light edge wear, where we expect to remove the crease, is valued using recent sales of that card with light edge wear and no crease.',
+          'You can enter your own estimate when you submit. <b>We confirm the value at assessment, before any work begins</b>, and if it changes your surcharge we’ll let you know the updated price before restoration work starts.',
+          'This value is for service pricing only. It isn’t a promise of what the card will be worth or grade after restoration, and it doesn’t replace your declared value, which covers insurance and shipping.'
+        ]
+      }
     },
     referral: {
       enabled: false,            // turn on (and fill the Referral Codes tab) to offer codes
@@ -324,10 +334,10 @@ const CONFIG = {
       qtyLabel: 'Number of {items}',
       defaultHint: 'Estimate only — the final service recommendation comes after assessment. Shipping &amp; handling not included.',
       multiHint: 'Assumes the same service and value for each {item}. Ask about bulk pricing for 5+ cards.',
-      valueLabel: 'Estimated card value per card ($)',
+      valueLabel: 'Estimated value after restoration, per card ($)',
       valuePlaceholder: 'e.g. 300',
       noSurchargeHint: 'Card Refresh, add-ons and assessments have no value surcharge. Estimate only — the final service recommendation comes after assessment.',
-      customQuoteHint: 'Cards valued above {max} need a custom quote — reach out directly for pricing.'
+      customQuoteHint: 'Cards with an estimated value after restoration above {max} need a custom quote — reach out directly for pricing.'
     }
   },
   tool: {   // centering calculator — add 'tool' to layout.order to show
@@ -379,7 +389,9 @@ const CONFIG = {
       otherLabel: 'Other (describe)',
       noteLabel: 'Concerns'
     },
-    value: { show: true, label: 'Declared value ($)', placeholder: 'e.g. 300' },
+    value: { show: true, label: 'Declared value ($) <span class="hint-inline">— current condition, for insurance</span>', placeholder: 'e.g. 300' },
+    restoredValue: { show: true, label: 'Estimated value after restoration ($) <span class="hint-inline">(optional)</span>', placeholder: 'e.g. 500',
+                     hint: 'Sets the value surcharge on repairs. Your best guess of what the card will be worth once it’s fixed — we confirm it at assessment. <a href="#value-basis">How it’s determined</a>' },
     serviceLabel: 'Service + turnaround',
     servicePlaceholder: 'Choose a service and speed',
     notesLabel: 'Anything else we should know',
@@ -716,6 +728,9 @@ const CONFIG = {
         'The work is the same — you’re choosing how quickly your card moves through the queue. Card Refresh: Priority 3–5, Standard 7–9 business days. Minor Repair and Full Restoration: Priority 5–10, Standard 20–30 business days.',
         'Your card may be ready early. We aim to return it no later than the end of its window, and we’ll contact you if anything changes.' ] },
       { q: 'Is cleaning included with repairs?', a: ['Yes. Every card starts with a Card Refresh — cleaning is included before any repair or restoration.'] },
+      { q: 'How is the value after restoration determined?', a: [
+        'Minor Repair and Full Restoration have a value surcharge based on what your card is expected to be worth once the work is done. We estimate it from current market sales of the same card in the condition we expect after the service: damage we expect to fix, like a crease or dent, is left out, and wear we don’t expect to change, like whitening or edge wear, still counts.',
+        'You can enter your own estimate when you submit. We confirm the value at assessment, before any work begins, and if it changes your surcharge we’ll let you know the updated price first. It’s for pricing only: it isn’t a promise of the card’s value or grade after restoration, and your declared value still covers insurance and shipping.' ] },
       { q: 'How do assessments work?', a: [
         '<b>Photo assessment — free.</b> Send sharp, well-lit photos of the front, back and any damage (the submission form takes them). We’ll point out what we can see and what may need a closer look.',
         '<b>Video call — $10 for up to 10 cards</b>, or <b>in person — $15 for up to 10 cards</b>, for a closer look and a service recommendation.',
@@ -1625,6 +1640,13 @@ const CONFIG = {
   }
   .pricing-explainer p{font-size:13px; color:var(--muted); margin:0 0 12px; line-height:1.6;}
   .pricing-explainer p:last-child{margin-bottom:4px;}
+  .value-basis-note{margin-top:18px; padding:16px 18px; border:1px solid var(--line); border-left:4px solid var(--blue, var(--accent)); border-radius:8px; background:color-mix(in srgb, var(--blue, var(--accent)) 6%, transparent); scroll-margin-top:90px;}
+  .value-basis-note .vb-title{font-weight:700; font-size:14px; margin-bottom:8px; color:var(--text);}
+  .value-basis-note p{font-size:13px; color:var(--muted); line-height:1.6; margin:0 0 8px;}
+  .value-basis-note p:last-child{margin-bottom:0;}
+  .value-basis-note b{color:var(--text);}
+  .rv-hint{display:block; font-size:12px; color:var(--muted); margin-top:6px; line-height:1.5;}
+  .rv-hint a{color:var(--blue, var(--accent)); font-weight:700;}
   .setup-banner{
     background:color-mix(in srgb, var(--highlight) 14%, var(--bg)); border-bottom:1px solid var(--highlight);
     color:var(--text); font-size:12px; line-height:1.5; padding:8px 16px; text-align:center;
@@ -2029,6 +2051,9 @@ const CONFIG = {
   .v-brush .pc-price.is-label{color:var(--blue); -webkit-text-stroke:1.2px var(--ink); text-transform:uppercase; font-size:calc(34px * var(--ds));}
   .v-brush .pc-desc{color:var(--ink-soft); font-size:13.5px; border-top-color:#d9dfef;}
   .speed-table{width:100%; border-collapse:separate; border-spacing:0 6px; margin:12px 0 2px;}
+  .pc-basis{margin:12px 0 -6px; font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--muted);}
+  .pc-sur{display:inline-block; margin-top:6px; font-size:13px; font-weight:700; color:var(--blue, var(--accent)); text-decoration:none;}
+  .pc-sur:hover{text-decoration:underline;}
   .speed-table th, .speed-table td{padding:7px 10px; background:#f4f6fd; vertical-align:middle;}
   .speed-table th{text-align:left; border-radius:6px 0 0 6px; border-left:5px solid var(--gold); color:var(--ink); font-weight:400;}
   .speed-table tr:nth-child(2) th{border-left-color:var(--blue);}
@@ -2270,9 +2295,15 @@ function tierSub(t){
   if(a && a.price != null && a.comboPrice != null) return `Only ${money(a.comboPrice)} when combined with another service.`;
   return '';
 }
+function surFrom(){ const b = SUR && SUR.bands.find(x => x.rate); const i = b ? SUR.bands.indexOf(b) : -1; return i > 0 ? money(SUR.bands[i - 1].upTo) : null; }
 function tierPriceHtml(t){
-  if(t.speeds && t.speeds.length) return `<table class="speed-table"><tbody>${t.speeds.map(sp =>
-    `<tr><th scope="row"><span class="sp-label">${T(sp.label)}</span>${sp.days ? `<small class="sp-days">${T(sp.days)}</small>` : ''}</th><td class="sp-price">${money(sp.price)}</td></tr>`).join('')}</tbody></table>`;
+  if(t.speeds && t.speeds.length){
+    const sur = SUR && t.surcharge, over = surFrom();
+    return (SUR ? `<div class="pc-basis">${sur ? 'Base price per card' : 'Flat price per card · no value surcharge'}</div>` : '') +
+      `<table class="speed-table"><tbody>${t.speeds.map(sp =>
+      `<tr><th scope="row"><span class="sp-label">${T(sp.label)}</span>${sp.days ? `<small class="sp-days">${T(sp.days)}</small>` : ''}</th><td class="sp-price">${money(sp.price)}</td></tr>`).join('')}</tbody></table>` +
+      (sur ? `<a class="pc-sur" href="#value-surcharge">+ value surcharge if the value after restoration is over ${over || 'the first band'} →</a>` : '');
+  }
   const unit = t.unit != null ? t.unit : P.unit;
   const comboOnly = t.price == null && t.comboPrice != null;
   const amt = t.priceLabel ? T(t.priceLabel) : (comboOnly ? '+' : '') + money(comboOnly ? t.comboPrice : t.price);
@@ -2399,9 +2430,10 @@ const SECTIONS = {
     if(loose.length) h += `<div class="ladder-group-label" style="margin-top:36px;">${T(ADDONS[loose[0]].groupLabel || 'Add-ons')}</div>` + tiersHtml(loose.map(addonCard));
     if(P.notes && P.notes.length) h += `<div class="price-notes">${P.notes.map(n => `<p>${T(n)}</p>`).join('')}</div>`;
     if(SUR){
-      h += `<div class="ladder-group-label" style="margin-top:36px;">${T(SUR.groupLabel)}</div>` +
+      h += `<div class="ladder-group-label" id="value-surcharge" style="margin-top:36px; scroll-margin-top:90px;">${T(SUR.groupLabel)}</div>` +
         `<div class="pricing-explainer">${(SUR.explainer || []).map(p => `<p>${T(p)}</p>`).join('')}</div>` +
-        surchargeTableHtml() + (SUR.note ? `<div class="surcharge-note">${T(SUR.note)}</div>` : '');
+        surchargeTableHtml() + (SUR.note ? `<div class="surcharge-note">${T(SUR.note)}</div>` : '') +
+        (SUR.basis ? `<div class="value-basis-note" id="value-basis" role="note"><div class="vb-title">${T(SUR.basis.title)}</div>${SUR.basis.p.map(x => `<p>${T(x)}</p>`).join('')}</div>` : '');
     }
     const K = P.calculator;
     if(K && K.show){
@@ -2412,7 +2444,7 @@ const SECTIONS = {
         ${SUR ? `<div class="field" style="margin-bottom:0;"><label for="calc-value">${T(K.valueLabel)} <span class="hint-inline">(optional)</span></label><input type="text" id="calc-value" inputmode="decimal" placeholder="${attr(T(K.valuePlaceholder))}"></div>` : ''}
         ${P.referral.enabled ? `<div class="field" style="margin-bottom:0; margin-top:14px;"><label for="calc-referral">Referral code <span class="hint-inline">(optional)</span></label><input type="text" id="calc-referral" placeholder="e.g. CODE123" autocapitalize="characters"></div>` : ''}
         <div class="calc-result">
-          <div class="calc-line"><span id="calc-base-label">Base service</span><span id="calc-base">—</span></div>
+          <div class="calc-line"><span id="calc-base-label">Base price</span><span id="calc-base">—</span></div>
           ${ADDONS.map((a, i) => `<div class="calc-line" id="${calcAddonIds(i).line}" style="display:none;"><span>${T(a.calcLine)}</span><span id="${calcAddonIds(i).amt}">—</span></div>`).join('')}
           <div class="calc-line" id="calc-surcharge-line" style="display:none;"><span>Value surcharge</span><span id="calc-surcharge">—</span></div>
           <div class="calc-line" id="calc-discount-line" style="display:none;"><span>Referral discount (${Math.round(P.referral.discount * 100)}%)</span><span id="calc-discount">—</span></div>
@@ -2702,7 +2734,7 @@ let runCalculator = null;
     const noAdd = !!(tier.isAddon || tier.noAddons);
     const nextP = tier.isAddon && ADDONS[tier.addonIdx] && ADDONS[tier.addonIdx].nextPrice != null ? Number(ADDONS[tier.addonIdx].nextPrice) : null;
     const baseTotal = nextP != null ? perItem + (qty - 1) * nextP : perItem * qty;
-    baseLabel.textContent = qty > 1 ? (nextP != null ? `Base service (${money(perItem)} + ${money(nextP)} × ${qty - 1})` : `Base service (${money(perItem)} × ${qty})`) : 'Base service';
+    baseLabel.textContent = qty > 1 ? (nextP != null ? `Base price (${money(perItem)} + ${money(nextP)} × ${qty - 1})` : `Base price (${money(perItem)} × ${qty})`) : 'Base price';
     baseEl.textContent = money(baseTotal);
     let addPer = 0;
     ADDONS.forEach((a, i) => {
@@ -2941,9 +2973,9 @@ let resetTerms = () => {};
     return `<option value="" disabled selected>${T(F.servicePlaceholder)}</option>` + groupedOptions(t => {
       const pr = (t.from ? 'starting at ' : '') + money(t.price);
       const nx = t.isAddon && ADDONS[t.addonIdx] && ADDONS[t.addonIdx].nextPrice != null ? ADDONS[t.addonIdx].nextPrice : null;
-      const label = (t.bulk && BULK) ? `${t.title} — ${pr} (bulk: ${bulkShort()})` : t.isAddon ? `${t.title} only — ${pr}${nx != null ? ` first ${WD.item}, ${money(nx)} each after` : ''}` : `${t.title} — ${pr}`;
+      const label = (t.bulk && BULK) ? `${t.title} — ${pr} (bulk: ${bulkShort()})` : t.isAddon ? `${t.title} only — ${pr}${nx != null ? ` first ${WD.item}, ${money(nx)} each after` : ''}` : `${t.title} — ${pr}${t.surcharge && SUR ? ' base + value surcharge' : ''}`;
       const val = plain(t.isAddon ? `${t.title} only (${pr})` : `${t.title} (${pr})`);
-      return `<option value="${attr(val)}"${t.isAddon ? ' data-addon="1"' : ''}${t.noAddons ? ' data-noaddons="1"' : ''}>${label}</option>`;
+      return `<option value="${attr(val)}"${t.isAddon ? ' data-addon="1"' : ''}${t.noAddons ? ' data-noaddons="1"' : ''}${t.surcharge && SUR ? ' data-sur="1"' : ''}>${label}</option>`;
     });
   }
   function setUploadingState(active){
@@ -2997,6 +3029,7 @@ let resetTerms = () => {};
       <div class="field"><label for="f-card-${id}">${T(F.itemNameLabel)} <span class="req">*</span></label><input type="text" id="f-card-${id}" placeholder="${attr(T(F.itemNamePlaceholder))}" required></div>
       ${(F.extraFields || []).length ? `<div class="row2 row2-wrap">${F.extraFields.map(x => `<div class="field"><label for="f-x-${x.key}-${id}">${T(x.label)}</label><input type="text" id="f-x-${x.key}-${id}" placeholder="${attr(T(x.placeholder || ''))}"></div>`).join('')}</div>` : ''}
       ${F.value.show ? `<div class="field"><label for="f-value-${id}">${T(F.value.label)}</label><input type="text" id="f-value-${id}" inputmode="decimal" placeholder="${attr(T(F.value.placeholder))}"></div>` : ''}
+      ${F.restoredValue && F.restoredValue.show && SUR ? `<div class="field" id="f-rv-wrap-${id}" hidden><label for="f-rv-${id}">${T(F.restoredValue.label)}</label><input type="text" id="f-rv-${id}" inputmode="decimal" placeholder="${attr(T(F.restoredValue.placeholder))}" aria-describedby="f-rv-hint-${id}"><small class="rv-hint" id="f-rv-hint-${id}">${T(F.restoredValue.hint)}</small></div>` : ''}
       ${ALL_TIERS.length ? `<div class="field"><label for="f-service-${id}">${T(F.serviceLabel)} <span class="req">*</span></label><select id="f-service-${id}" required>${serviceOptionsHtml()}</select>
         ${ADDONS.map((a, i) => `<label class="addon-check" id="${formAddonIds(i, id).wrap}"><input type="checkbox" id="${formAddonIds(i, id).inp}"> ${T(a.formCheckbox)} (+${money(a.comboPrice)})</label>`).join('')}</div>` : ''}
       ${F.concerns && F.concerns.options && F.concerns.options.length ? `<div class="field"><label id="f-cc-label-${id}">${T(F.concerns.label)}</label><div class="concern-grid" role="group" aria-labelledby="f-cc-label-${id}">${F.concerns.options.map(o => `<label class="concern-chip"><input type="checkbox" name="f-cc-${id}" value="${attr(plain(T(o)))}"> ${T(o)}</label>`).join('')}</div>${F.concerns.otherLabel ? `<input type="text" id="f-cc-other-${id}" class="concern-other" placeholder="${attr(T(F.concerns.otherLabel))}" aria-label="${attr(plain(T(F.concerns.otherLabel)))}">` : ''}</div>` : ''}
@@ -3078,6 +3111,7 @@ let resetTerms = () => {};
       const o = svc.selectedOptions[0];
       const solo = !!(o && (o.dataset.addon || o.dataset.noaddons));
       ADDONS.forEach((a, i) => { const ids = formAddonIds(i, id), wrap = $(ids.wrap); if(wrap){ wrap.style.display = solo ? 'none' : 'flex'; if(solo) $(ids.inp).checked = false; } });
+      const rv = $(`f-rv-wrap-${id}`); if(rv) rv.hidden = !(o && o.dataset.sur);   // after-restoration value only matters for repairs
     });
     container.querySelector(`[data-card-id="${id}"] .remove-card-btn`).addEventListener('click', () => {
       delete entries[id]; container.querySelector(`[data-card-id="${id}"]`).remove(); renumber();
@@ -3151,6 +3185,7 @@ let resetTerms = () => {};
       const cid = el.dataset.cardId;
       const itemName = $(`f-card-${cid}`).value.trim();
       const value = $(`f-value-${cid}`) ? $(`f-value-${cid}`).value.trim() : '';
+      const rvWrap = $(`f-rv-wrap-${cid}`), restoredValue = rvWrap && !rvWrap.hidden ? $(`f-rv-${cid}`).value.trim() : '';
       const svc = $(`f-service-${cid}`);
       let service = svc ? svc.value : '';
       const so = svc && svc.selectedOptions[0];
@@ -3168,7 +3203,7 @@ let resetTerms = () => {};
       const nameParts = extra.filter(o => o.x.appendToName).map(o => o.v);
       if(!itemName || (svc && !service)) return setMsg(formMsg, T(M.missingItem), 'err');
       const ph = entries[cid].photos;
-      items.push({ name: nameParts.length ? `${itemName} — ${nameParts.join(' · ')}` : itemName, value, service, notes,
+      items.push({ name: nameParts.length ? `${itemName} — ${nameParts.join(' · ')}` : itemName, value, restoredValue, service, notes,
         photos: { front: ph.front, back: ph.back, details: ph.details.filter(d => d.status === 'done').map(d => d.url) } });
     }
     if(!name) return setMsg(formMsg, T(M.missingName), 'err');
