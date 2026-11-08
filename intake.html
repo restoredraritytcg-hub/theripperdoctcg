@@ -13,6 +13,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="theme-color" content="#ffffff">
 <title>Intake</title>
+<link rel="stylesheet" href="scan/scan.css">
+<script src="scan/scanview.js" defer></script>
 <script>
 /* =====================================================================
  *  OWNER INTAKE PAGE — intake-v1 (private: not linked from the site)
@@ -21,7 +23,7 @@
  * ===================================================================== */
 const CONFIG = {
   business: 'RipperDoc TCG',
-  build: 'rd-intake-v7',
+  build: 'rd-intake-v8',
   endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
   cloudinaryCloud: 'oobgsfee',
   cloudinaryPreset: 'rpbeyooz',
@@ -252,7 +254,7 @@ const esc = v => String(v == null ? '' : v).replace(/&/g,'&amp;').replace(/</g,'
 const app = $('#app'), cap = s => s.charAt(0).toUpperCase() + s.slice(1);
 document.title = 'Intake — ' + C.business;
 $('#brand').innerHTML = esc(C.business) + '<small>Intake</small>';
-$('#foot').textContent = C.build;
+$('#foot').innerHTML = esc(C.build) + ' · <a href="help.html" target="_blank" rel="noopener">Help &amp; setup</a>';
 const money = n => n == null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
 const thumb = u => /res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u) ? u.replace('/image/upload/', '/image/upload/f_auto,q_auto,c_fill,w_200,h_266/') : u;
@@ -444,6 +446,9 @@ function cardHtml(it, single){
     `<dl class="facts"><dt>Service</dt><dd>${esc(it.service || '—')}</dd>${it.value ? `<dt>Declared value</dt><dd>${esc(it.value)}</dd>` : ''}${it.notes ? `<dt>Customer notes</dt><dd>${esc(it.notes)}</dd>` : ''}` +
     `<dt>Quote</dt><dd><b>${/cancel/i.test(it.status) ? 'Not charged' : it.quote == null ? 'Needs a price' : money(it.quote)}</b> <span class="muted">${esc(it.breakdown)}</span></dd></dl>` +
     (cust.length ? `<div class="ph"><b>Customer photos</b><div class="strip">${cust.map(([l, u]) => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${esc(l)}" loading="lazy"></a><span>${esc(l)}</span></span>`).join('')}</div></div>` : '') +
+    `<div class="ph scans"><b>Scans</b> <span class="scanlinks">${[['before', 'Before'], ['progress', 'In progress'], ['after', 'After']].map(([k, l]) =>
+      `<a class="btn ghost small" href="#scan=${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}/${k}">📷 Scan ${l.toLowerCase()}</a>`).join(' ')}</span>` +
+      (window.ScanView && window.ScanView.has(it.scans) ? `<div data-scans>${window.ScanView.html(it.scans, { owner: true })}</div>` : `<p class="muted" style="margin:6px 0 0;font-size:14px">No scans yet.</p>`) + `</div>` +
     `<div class="ph"><b>Before photos</b>${strip('before', it.before)}</div>` +
     `<div class="ph"><b>After photos</b>${strip('after', it.after)}</div>` +
     (window.CardValueLinks && it.name ? `<div class="cl-value" style="margin-top:12px">${window.CardValueLinks(it.name)}</div>` : '') +
@@ -466,6 +471,11 @@ function wireCard(it){
   }));
   $$('[data-rm]', el).forEach(b => b.onclick = () => { if (b.dataset.armed) return save({ action: 'removePhoto', id: O.id, num: it.num, kind: b.dataset.rm, url: b.dataset.url }, 'Photo removed');
     b.dataset.armed = '1'; b.textContent = '?'; b.setAttribute('aria-label', 'Tap again to remove'); setTimeout(() => { b.dataset.armed = ''; b.textContent = '×'; }, 3000); });
+  const sv = $('[data-scans]', el);
+  if (sv && window.ScanView) window.ScanView.wire(sv, it.scans, { owner: true,
+    onCentering: (stage, side) => window.ScanView.openCentering(it.scans[stage][side], `${cap(C.item)} ${it.num} · ${side}`, async out => {
+      const d = await api({ action: 'scanCentering', id: O.id, num: it.num, stage, side, centering: out }); take(d); const y = scrollY; render(); scrollTo(0, y); }).catch(err => toast(err.message)),
+    onDelete: (stage, side) => save({ action: 'removeScan', id: O.id, num: it.num, stage, side }, 'Scan removed') });
   const ta = $('[data-notes]', el), saved = $('[data-saved]', el); let last = ta.value;
   ta.addEventListener('blur', async () => { if (ta.value === last) return; try { await api({ action: 'note', id: O.id, num: it.num, text: ta.value }); last = ta.value; saved.hidden = false; setTimeout(() => { saved.hidden = true; }, 2000); } catch (err) { toast(err.message); } });
   const ov = $('[data-ov]', el); let lastOv = ov.value;
@@ -505,7 +515,7 @@ function customers(){
 }
 function setNav(active){
   const n = $('#tabs') || (() => { const x = document.createElement('nav'); x.id = 'tabs'; x.className = 'tabs'; x.setAttribute('aria-label', 'Sections'); $('header.top .wrap').insertBefore(x, $('#hdr')); return x; })();
-  n.innerHTML = [['orders', '#', 'Orders'], ['customers', '#customers', 'Customers'], ['cards', '#cards', cap(C.items)], ['site', '#site', 'Website']]
+  n.innerHTML = [['orders', '#', 'Orders'], ['customers', '#customers', 'Customers'], ['cards', '#cards', cap(C.items)], ['scan', '#scan', 'Scan'], ['site', '#site', 'Website']]
     .map(([k, h, l]) => `<a href="${h}"${k === active ? ' aria-current="page"' : ''}>${l}</a>`).join('');
 }
 function hdrRefresh(fn){ $('#hdr').innerHTML = `<button class="btn ghost small" id="refresh">Refresh</button> <button class="btn ghost small" id="signout">Sign out</button>`; $('#refresh').onclick = fn; $('#signout').onclick = signOut; }
@@ -927,6 +937,32 @@ async function upload(file){
   return d.secure_url;
 }
 
+/* ---------- Scan station (#scan=<order id>/<card>/<stage>) — code in scan/station.js ---------- */
+let STATION = null;
+async function showScan(arg){
+  setNav('scan'); hdrRefresh(() => STATION && STATION.reload());
+  O = null;   // the order view reloads after scanning
+  const [id, num, stage, side] = String(arg || '').split('/').map(x => x ? decodeURIComponent(x) : undefined);
+  if (!STATION) {
+    app.innerHTML = '<p class="muted">Loading the scan station…</p>';
+    try {
+      const m = await import('./scan/station.js');
+      app.innerHTML = '';
+      STATION = m.mount(app, { C, api, toast, esc, upload: uploadScan });
+    } catch (err) { app.innerHTML = `<p class="err">Couldn’t load the scan station: ${esc(err.message)}</p>`; return; }
+  } else { app.innerHTML = ''; app.appendChild(STATION.el); }
+  STATION.apply({ id, num, stage, side });
+}
+async function uploadScan(blob, folder){
+  if (!C.cloudinaryCloud || !C.cloudinaryPreset) throw new Error('Photo uploads aren’t set up — add Cloudinary to CONFIG.');
+  const fd = new FormData(); fd.append('file', blob, 'scan.jpg'); fd.append('upload_preset', C.cloudinaryPreset); fd.append('folder', folder);
+  let d;
+  try { const res = await fetch('https://api.cloudinary.com/v1_1/' + encodeURIComponent(C.cloudinaryCloud) + '/image/upload', { method: 'POST', body: fd }); d = await res.json(); }
+  catch (_) { throw new Error('Couldn’t reach Cloudinary — check your connection and try again.'); }
+  if (!d.secure_url) throw new Error((d.error && d.error.message) || 'Upload failed');
+  return { url: d.secure_url, w: d.width, h: d.height };
+}
+
 /* ---------- routing ---------- */
 function route(){
   if (!PIN) return showPin();
@@ -934,6 +970,7 @@ function route(){
   if (h === 'customers') { window.scrollTo(0, 0); return showCustomers(); }
   if (h.indexOf('customer=') === 0) { window.scrollTo(0, 0); return showCustomer(decodeURIComponent(h.slice(9))); }
   if (h === 'cards') { window.scrollTo(0, 0); return showCards(); }
+  if (h === 'scan' || h.indexOf('scan=') === 0) { window.scrollTo(0, 0); return showScan(h.slice(5)); }
   if (h === 'new' || h.indexOf('new=') === 0) { window.scrollTo(0, 0); return showNew(h.length > 4 ? decodeURIComponent(h.slice(4)) : ''); }
   if (h === 'site' || h.indexOf('site=') === 0) { const sub = h.slice(5); if (sub && SUB !== sub) window.scrollTo(0, 0); return showSite(SUBS.some(x => x[0] === sub) ? sub : (sub ? 'status' : SUB)); }
   setNav('orders');
