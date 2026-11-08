@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v21',   // shown in the footer — bump on every upload
+  build: 'rd-v22',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3209,7 +3209,9 @@ let resetTerms = () => {};
       const nameParts = extra.filter(o => o.x.appendToName).map(o => o.v);
       if(!itemName || (svc && !service)) return setMsg(formMsg, T(M.missingItem), 'err');
       const ph = entries[cid].photos;
+      const ci = window.CardInfo ? await window.CardInfo($(`f-card-${cid}`)).catch(() => ({})) : {};   // set, card #, year for the back end
       items.push({ name: nameParts.length ? `${itemName} — ${nameParts.join(' · ')}` : itemName, value, restoredValue, service, notes,
+        set: ci.set || '', cardNo: ci.cardNo || '', year: ci.year || '',
         photos: { front: ph.front, back: ph.back, details: ph.details.filter(d => d.status === 'done').map(d => d.url) } });
     }
     if(!name) return setMsg(formMsg, T(M.missingName), 'err');
@@ -3599,6 +3601,7 @@ let resetTerms = () => {};
   function card(name, setName, num, total, year, rarity, img){
     const n = num ? (total && /^\d+$/.test(num) ? `${num}/${total}` : /^\d+$/.test(num) ? `#${num}` : num) : '';
     return { label: `${name} — ${setName || ''}${n ? ' ' + n : ''}${year ? ` (${year})` : ''}`.trim(), name, sub: [setName, n, year, rarity].filter(Boolean).join(' · '), img,
+      setName: setName || '', cardNo: n, year: year ? String(year) : '',
       num: String(num || '').replace(/^0+/, ''), total: String(total || ''), hay: words(`${name} ${setName || ''}`) };
   }
   async function getJSON(url, ms){
@@ -3710,7 +3713,8 @@ let resetTerms = () => {};
   function pick(i){
     const c = items[i]; if (!c || !input) return;
     input.value = c.label.slice(0, Number(input.maxLength) > 0 ? input.maxLength : 200);
-    input.dataset.clPicked = input.value; close(); clearTimeout(timer); seq++;
+    input.dataset.clPicked = input.value; input.dataset.clCard = JSON.stringify({ set: c.setName, cardNo: c.cardNo, year: c.year });
+    close(); clearTimeout(timer); seq++;
     input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
   }
   // ---- "Look up value" links (PriceCharting + eBay sold), filled from whatever is in the card name field ----
@@ -3731,6 +3735,20 @@ let resetTerms = () => {};
     const t = el.value.trim(); box.hidden = t.length < 3; if (!box.hidden) box.innerHTML = valueLinksHtml(t);
   }
   window.CardValueLinks = valueLinksHtml;   // the owner portal reuses this on each card
+  // Set, card # and year for a card name field: from the suggestion that was picked, or — for a typed name — from the
+  // card list when the text matches exactly one card. Otherwise blank (the owner fills it in on the intake page).
+  window.CardInfo = async function (el) {
+    const blank = { set: '', cardNo: '', year: '' }, text = String(el && el.value || '').trim();
+    if (!text) return blank;
+    if (el.dataset.clPicked === el.value && el.dataset.clCard) { try { return JSON.parse(el.dataset.clCard); } catch (_) {} }
+    try { await loadDB(); } catch (_) { return blank; }
+    if (!DB) return blank;
+    const out = c => ({ set: c.setName, cardNo: c.cardNo, year: c.year });
+    const exact = DB.filter(c => c.label === text); if (exact.length === 1) return out(exact[0]);
+    const r = localSearch(text); if (r.length === 1) return out(r[0]);
+    const k = keyOf(text), same = DB.filter(c => c.nn === k); if (same.length === 1) return out(same[0]);
+    return blank;
+  };
   function attach(el){
     if (el.dataset.cl) return; el.dataset.cl = '1';
     el.setAttribute('autocomplete', 'off'); el.setAttribute('role', 'combobox'); el.setAttribute('aria-autocomplete', 'list');
