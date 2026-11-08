@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v20',   // shown in the footer — bump on every upload
+  build: 'rd-v21',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -2175,6 +2175,12 @@ const CONFIG = {
   .v-brush .rv-card-stars, .v-brush .rv-sum-stars{-webkit-text-stroke:.5px var(--ink);}
 
 </style>
+<script src="scan/scanview.js" defer></script>
+<style>
+  .trk-media{margin-top:14px;}
+  .trk-media > .lbl{display:block; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); margin-bottom:8px; font-weight:700;}
+  .trk-media .sv-stage{background:transparent;}
+</style>
 </head>
 <body>
 <noscript><p style="padding:20px;text-align:center;">This site needs JavaScript turned on.</p></noscript>
@@ -3352,6 +3358,17 @@ let resetTerms = () => {};
       body.appendChild(stepper(stages, c.stageIndex, when));
       if(c.tracking){ const t = el('div', 'trk-tracking'); t.append('Return tracking #: '); t.appendChild(el('b', null, c.tracking)); body.appendChild(t); }
       if(c.note){ const nn = el('div', 'trk-note'); nn.appendChild(el('span', 'lbl', plain(T(K.noteLabel)))); nn.appendChild(document.createTextNode(c.note)); body.appendChild(nn); }
+      // Photos and scans (the scan station's straightened pictures, centering and close-ups)
+      const md = c.media;
+      if(md && window.ScanView){
+        const ph = md.photos || {}, anyPh = [ph.front, ph.back].concat(ph.details || [], ph.before || [], ph.after || []).some(Boolean);
+        if(ScanView.has(md.scans) || anyPh){
+          const box = el('div', 'trk-media'); box.appendChild(el('span', 'lbl', 'Photos & scans'));
+          const inner = document.createElement('div'); inner.innerHTML = ScanView.html(md.scans, { photos: ph }); box.appendChild(inner);
+          ScanView.wire(inner, md.scans || {}, { photos: ph });
+          body.appendChild(box);
+        }
+      }
       det.appendChild(body); tOut.appendChild(det);
     });
     tOut.hidden = false;
