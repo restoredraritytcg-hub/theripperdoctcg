@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v17',   // shown in the footer — bump on every upload
+  build: 'rd-v18',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3520,7 +3520,8 @@ let resetTerms = () => {};
 })();
 </script>
 <!-- ===== Card lookup: suggests Pokémon cards as you type a card name =====
-     Uses the same card catalog as CardVestIQ (pokemontcg.io), with TCGdex as a free backup. No keys.
+     Searches Restored Rarity's self-updating card list (instant), falling back to pokemontcg.io / TCGdex online.
+     Also shows "Look up value" links (PriceCharting, eBay sold) under the card name.
      Customers can still type any card that isn't listed (sports cards, customs, etc.).
      To turn it off, set on: false. To use another catalog later, change api + toCard below. -->
 <style>
@@ -3534,14 +3535,23 @@ let resetTerms = () => {};
   .cl-opt small{display:block;color:var(--muted,#666);font-size:12.5px}
   .cl-foot{padding:6px 12px 8px;color:var(--muted,#666);font-size:12px;border-top:1px solid var(--line,#ddd)}
   .cl-msg{padding:10px 12px;color:var(--muted,#666)}
+  .cl-value{margin:6px 0 16px;font-size:13px;color:var(--muted,#666);line-height:1.5}
+  .cl-value a{color:var(--blue,var(--accent,#2563eb));font-weight:700;text-decoration:none;white-space:nowrap}
+  .cl-value a:hover{text-decoration:underline}
+  .cl-value small{display:block;font-size:12px;opacity:.9}
 </style>
 <script>
 (function(){
   const CL = {
     on: true,
     selector: 'input[id^="f-card-"]',
-    api: 'https://api.pokemontcg.io/v2/cards',     // main catalog (same as CardVestIQ)
-    backup: 'https://api.tcgdex.net/v2/en',         // used when the main one is slow, busy or down
+    // 1st choice: Restored Rarity's card list (21k+ cards, updates itself on the 1st and 15th). Searched in
+    // the browser, so suggestions are instant. Tried in order; the second is GitHub's copy of the same file.
+    catalogs: ['https://restoredraritytcg.com/portal/cards.json',
+               'https://raw.githubusercontent.com/restoredraritytcg-hub/restoredraritytcg/main/portal/cards.json'],
+    api: 'https://api.pokemontcg.io/v2/cards',     // online fallback (same catalog as CardVestIQ): brand-new cards,
+    backup: 'https://api.tcgdex.net/v2/en',         // or if the list can't load. Then TCGdex.
+    valueLinks: true,                               // "Look up value" links under the card name
     minChars: 3,
     max: 12,
     timeoutMs: 4000
@@ -3551,7 +3561,7 @@ let resetTerms = () => {};
   $box.className = 'cl-box'; $box.hidden = true;
   $box.innerHTML = '<ul class="cl-list" role="listbox" id="cl-list"></ul><div class="cl-foot">Pokémon cards · not listed? Just keep typing</div>';
   const $list = $box.firstChild;
-  let input = null, items = [], active = -1, timer = 0, slowTimer = 0, seq = 0, sets = null;
+  let input = null, items = [], active = -1, timer = 0, slowTimer = 0, seq = 0, sets = null, DB = null, dbLoading = null;
 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const words = text => text.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(Boolean).slice(0, 5);
@@ -3561,12 +3571,12 @@ let resetTerms = () => {};
   // does a card match every typed word? (used to filter results we already have while the next search runs)
   const fits = (c, ws) => ws.every(w => /^\d+$/.test(w) ? (c.num === w || c.total === w) : c.hay.some(h => h.startsWith(w)));
   function card(name, setName, num, total, year, rarity, img){
-    const n = num ? (total ? `${num}/${total}` : `#${num}`) : '';
-    return { label: `${name} — ${setName || ''}${n ? ' ' + n : ''}`.trim(), name, sub: [setName, n, year, rarity].filter(Boolean).join(' · '), img,
+    const n = num ? (total && /^\d+$/.test(num) ? `${num}/${total}` : /^\d+$/.test(num) ? `#${num}` : num) : '';
+    return { label: `${name} — ${setName || ''}${n ? ' ' + n : ''}${year ? ` (${year})` : ''}`.trim(), name, sub: [setName, n, year, rarity].filter(Boolean).join(' · '), img,
       num: String(num || '').replace(/^0+/, ''), total: String(total || ''), hay: words(`${name} ${setName || ''}`) };
   }
-  async function getJSON(url){
-    const ctl = window.AbortController ? new AbortController() : null, t = setTimeout(() => ctl && ctl.abort(), CL.timeoutMs);
+  async function getJSON(url, ms){
+    const ctl = window.AbortController ? new AbortController() : null, t = setTimeout(() => ctl && ctl.abort(), ms || CL.timeoutMs);
     try { const r = await fetch(url, ctl ? { signal: ctl.signal } : {}); if (!r.ok) throw new Error('lookup ' + r.status); return await r.json(); }
     finally { clearTimeout(t); }
   }
@@ -3588,9 +3598,47 @@ let resetTerms = () => {};
       return card(c.name, st[0], c.localId, st[1], '', '', c.image ? c.image + '/low.webp' : '');
     }).filter(c => fits(c, ws)).slice(0, CL.max);
   }
+  // ---- local card list (Restored Rarity's cards.json) ----
+  function loadDB(){
+    if (DB) return Promise.resolve(DB);
+    if (!dbLoading) dbLoading = (async () => {
+      for (const u of CL.catalogs || []) {
+        try {
+          const d = await getJSON(u, 15000);
+          if (!d || !Array.isArray(d.cards) || d.cards.length < 1000) continue;
+          DB = d.cards.map(([name, si, num, pic]) => {
+            const st = d.sets[si] || [], c = card(name, st[1], num, st[3], st[2], '', pic === 1 ? `${d.img}${st[4]}/${num}/low.webp` : pic ? `${pic}/low.webp` : '');
+            c.order = si; c.nn = words(name).join(' '); c.flat = c.hay.join(' ') + ' ' + c.num + ' ' + (st[2] || ''); return c;
+          });
+          return DB;
+        } catch (_) {}
+      }
+      throw new Error('card list unavailable');
+    })().catch(e => { dbLoading = null; DB = false; throw e; });
+    return dbLoading;
+  }
+  function localSearch(text){
+    const ws = words(text.replace(/#/g, ' ')), q = ws.join(' '); if (!ws.length) return [];
+    const out = [];
+    for (const c of DB) {
+      if (!ws.every(w => /^\d+$/.test(w) ? (c.num === w.replace(/^0+/, '') || c.total === w || c.flat.includes(w)) : c.flat.includes(w))) continue;
+      let sc = 0;
+      if (c.nn === q) sc += 100; else if (c.nn.startsWith(q)) sc += 60; else if (c.nn.startsWith(ws[0])) sc += 40;
+      else if (c.nn.split(' ').some(t => t.startsWith(ws[0]))) sc += 20;
+      if (ws.some(w => /^\d+$/.test(w) && w.replace(/^0+/, '') === c.num)) sc += 50;
+      out.push([sc, c]);
+    }
+    out.sort((a, b) => b[0] - a[0] || a[1].name.length - b[1].name.length || b[1].order - a[1].order);
+    return out.slice(0, CL.max).map(x => x[1]);
+  }
   async function search(text){
     const ws = words(text), k = ws.join(' '); if (!ws.length) return [];
     if (cache[k]) return cache[k];
+    if (DB === null) { try { await loadDB(); } catch (_) {} }
+    if (DB) {
+      const r = localSearch(text);
+      if (r.length || ws.join('').length < 4) return (cache[k] = r);   // not in the list: maybe brand new, ask online
+    }
     let res;
     try { res = await fromMain(ws); }
     catch (e) {
@@ -3639,6 +3687,24 @@ let resetTerms = () => {};
     input.dataset.clPicked = input.value; close(); clearTimeout(timer); seq++;
     input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
   }
+  // ---- "Look up value" links (PriceCharting + eBay sold), filled from whatever is in the card name field ----
+  const valueQuery = t => String(t || '').replace(/\s+—\s+/g, ' ').replace(/\((\d{4})\)/, '$1').replace(/(\d+)\/\d+/, '$1').replace(/\s+/g, ' ').trim();
+  function valueLinksHtml(text){
+    const q = encodeURIComponent(valueQuery(text));
+    return `Look up value: <a href="https://www.pricecharting.com/search-products?q=${q}&type=prices" target="_blank" rel="noopener">PriceCharting ↗</a>` +
+      ` · <a href="https://www.ebay.com/sch/i.html?_nkw=${q}&LH_Sold=1&LH_Complete=1" target="_blank" rel="noopener">eBay sold ↗</a>` +
+      `<small>Ungraded prices ≈ the card as it is now. For the value after restoration, use the price for the condition we expect once it’s fixed.</small>`;
+  }
+  function updateValueLinks(el){
+    if (!CL.valueLinks) return;
+    let box = el._clValue;
+    if (!box) {
+      box = el._clValue = document.createElement('div'); box.className = 'cl-value'; box.hidden = true;
+      const host = el.closest('.field, label.f, .f') || el; host.insertAdjacentElement('afterend', box);
+    }
+    const t = el.value.trim(); box.hidden = t.length < 3; if (!box.hidden) box.innerHTML = valueLinksHtml(t);
+  }
+  window.CardValueLinks = valueLinksHtml;   // the owner portal reuses this on each card
   function attach(el){
     if (el.dataset.cl) return; el.dataset.cl = '1';
     el.setAttribute('autocomplete', 'off'); el.setAttribute('role', 'combobox'); el.setAttribute('aria-autocomplete', 'list');
@@ -3650,6 +3716,10 @@ let resetTerms = () => {};
     if (el.dataset.clPicked === el.value || words(text).join('').length < CL.minChars) { close(); return; }
     const my = ++seq, k = keyOf(text);
     if (cache[k]) { items = cache[k]; active = -1; render(); return; }
+    if (DB) {   // list is loaded: search right away
+      const r = localSearch(text);
+      if (r.length || words(text).join('').length < 4) { items = cache[k] = r; active = -1; render(); return; }
+    }
     const q = quick(text);
     if (q && q.list.length) { items = q.list; active = -1; render(); if (q.complete) return; }   // instant results while the search runs
     timer = setTimeout(async () => {
@@ -3660,8 +3730,8 @@ let resetTerms = () => {};
       catch (err) { if (my === seq) { clearTimeout(slowTimer); items = []; msg('Card lookup isn’t responding right now — just type the card in.'); setTimeout(() => { if (my === seq) close(); }, 3000); } }
     }, delay);
   }
-  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches(CL.selector)) { attach(e.target); if (e.target.value.trim()) lookup(e.target, 0); } });
-  document.addEventListener('input', e => { const el = e.target; if (el.matches && el.matches(CL.selector)) lookup(el, 350); });
+  document.addEventListener('focusin', e => { if (e.target.matches && e.target.matches(CL.selector)) { attach(e.target); loadDB().catch(() => {}); if (e.target.value.trim()) lookup(e.target, 0); } });
+  document.addEventListener('input', e => { const el = e.target; if (el.matches && el.matches(CL.selector)) { updateValueLinks(el); lookup(el, 350); } });
   document.addEventListener('keydown', e => {
     if (e.target !== input || $box.hidden || !items.length) { if (e.key === 'Escape') close(); return; }
     if (e.key === 'ArrowDown') { e.preventDefault(); setActive(active + 1); }
