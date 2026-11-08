@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
   business: 'RipperDoc TCG',
-  build: 'rd-intake-v6',
+  build: 'rd-intake-v7',
   endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
   cloudinaryCloud: 'oobgsfee',
   cloudinaryPreset: 'rpbeyooz',
@@ -92,6 +92,12 @@ input:focus, textarea:focus{border-color:var(--accent); outline:none; box-shadow
 .ohead h1{font-size:30px}
 .contact{display:grid; gap:2px; font-size:15px; margin-top:6px}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px}
+.clink{margin-bottom:16px}
+.clink h2{margin-bottom:4px}
+.clink .clrow{display:flex; gap:8px; margin-top:10px}
+.clink .clrow input{flex:1; min-width:0; font-size:14px}
+.clink .clbtns{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+.clink .clbtns a{text-decoration:none; display:inline-flex; align-items:center}
 .quote{border:2px solid var(--highlight); margin-bottom:18px}
 .quote h2{font-size:20px; margin-bottom:10px}
 .qline{display:flex; justify-content:space-between; gap:12px; padding:5px 0; border-bottom:1px solid var(--line); font-size:15px}
@@ -361,6 +367,41 @@ function renderCard(){
   $$('[data-go]').forEach(b => b.onclick = () => { location.hash = '#' + encodeURIComponent(O.id) + '/' + encodeURIComponent(b.dataset.go); });
   wireCard(it); wireStatus(app);
 }
+/* Customer link: opens the website's Track Your Submission with this order already looked up.
+   The email rides in the #part, which browsers never send to a server. */
+function custLink(o){
+  const u = new URL('./', location.href);
+  u.search = '?track=' + encodeURIComponent(o.ref || '');
+  if (o.email) { const b = btoa(unescape(encodeURIComponent(String(o.email).trim().toLowerCase()))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); u.hash = 'k=' + b; }
+  else u.hash = 'track';
+  return u.href;
+}
+function custLinkHtml(o){
+  const url = custLink(o), first = String(o.name || '').trim().split(/\s+/)[0];
+  const msg = `Hi${first ? ' ' + first : ''}! Here's the link to follow your ${C.business} order ${o.ref}: ${url}`;
+  const tel = String(o.phone || '').replace(/[^+\d]/g, '');
+  return `<section class="panel clink" aria-label="Customer link"><h2>Customer link</h2>` +
+    `<p class="muted">Send this so your customer can see where their ${esc(C.items)} are, without typing their reference number or email.</p>` +
+    `<div class="clrow"><input type="text" id="clurl" readonly value="${esc(url)}" aria-label="Customer link"><button class="btn small" id="clcopy">Copy</button></div>` +
+    `<div class="clbtns">` +
+      (tel ? `<a class="btn ghost small" href="sms:${esc(tel)}?&body=${encodeURIComponent(msg)}">Text it</a>` : '') +
+      (o.email ? `<a class="btn ghost small" href="mailto:${esc(o.email)}?subject=${encodeURIComponent('Your ' + C.business + ' order ' + o.ref)}&body=${encodeURIComponent(msg)}">Email it</a>` : '') +
+      (navigator.share ? `<button class="btn ghost small" id="clshare">Share…</button>` : '') +
+      `<a class="btn ghost small" href="${esc(url)}" target="_blank" rel="noopener">Open</a>` +
+    `</div>` +
+    (o.email ? '' : `<p class="muted" style="margin-top:8px">This order has no email, so your customer will need to type the email they submitted with.</p>`) +
+  `</section>`;
+}
+function wireCustLink(o){
+  const url = custLink(o), inp = $('#clurl');
+  inp.onclick = () => inp.select();
+  $('#clcopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(url); } catch (_) { inp.select(); try { document.execCommand('copy'); } catch (__) {} }
+    toast('Customer link copied');
+  };
+  const sh = $('#clshare');
+  if (sh) sh.onclick = () => navigator.share({ title: C.business + ' order ' + o.ref, url }).catch(() => {});
+}
 function renderOrder(){
   hdrRefresh(() => loadOrder(O.id));
   const qt = O.quote || { lines: [], subtotal: 0, referral: 0, yours: 0, total: 0, notes: [] };
@@ -371,6 +412,7 @@ function renderOrder(){
       (O.email ? `<a href="mailto:${esc(O.email)}">${esc(O.email)}</a>` : '') + (O.phone ? `<a href="tel:${esc(O.phone.replace(/[^+\d]/g, ''))}">${esc(O.phone)}</a>` : '') +
       `<span>${esc(O.delivery)}${O.insured === 'Yes' ? ', insured return' : ''}</span>${O.address ? `<span class="muted">${esc(O.address)}</span>` : ''}</div></div>` +
       `<span class="status">${esc(O.status)}</span></div>` +
+    custLinkHtml(O) +
     `<section class="panel quote" aria-label="Quote"><h2>Quote</h2>` +
       qt.lines.map(l => `<div class="qline"><span>${esc(cap(C.item))} ${esc(l.num)}${l.name ? ': ' + esc(l.name) : ''}<span class="bd">${esc(l.breakdown)}</span></span><b>${l.cancelled ? 'Not charged' : l.quote == null ? 'Needs a price' : money(l.quote)}</b></div>`).join('') +
       `<div class="qline"><span>Subtotal</span><b>${money(qt.subtotal)}</b></div>` +
@@ -386,6 +428,7 @@ function renderOrder(){
         `<span class="sub">${esc(it.service || '')}</span></span>${statusCtl(it)}</div>`).join('') + `</section>` +
     O.items.map(it => cardHtml(it, false)).join('');
   $('#back').onclick = () => { location.hash = BACKTO; };
+  wireCustLink(O);
   $('#discgo').onclick = () => save({ action: 'discount', id: O.id, value: $('#disc').value.trim() }, 'Discount applied');
   if ($('#discclear')) $('#discclear').onclick = () => save({ action: 'discount', id: O.id, value: '' }, 'Discount removed');
   $('#disc').addEventListener('keydown', e => { if (e.key === 'Enter') $('#discgo').click(); });

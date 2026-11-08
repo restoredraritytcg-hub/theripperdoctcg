@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v18',   // shown in the footer — bump on every upload
+  build: 'rd-v19',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -3383,7 +3383,16 @@ let resetTerms = () => {};
     const q = new URLSearchParams(location.search).get('track');
     if(q){
       tRef.value = q.toUpperCase();
-      const go = () => { $('track').scrollIntoView({ block: 'start' }); tEmail.focus({ preventScroll: true }); };
+      // Customer link from the intake page: /?track=REF#k=<email, base64url> looks the order up right away
+      let em = '';
+      const k = new URLSearchParams(location.hash.slice(1)).get('k');
+      if(k){ try{ em = decodeURIComponent(escape(atob(k.replace(/-/g, '+').replace(/_/g, '/')))); }catch(_){ em = ''; } }
+      if(em && /@/.test(em)) tEmail.value = em;
+      const go = () => {
+        $('track').scrollIntoView({ block: 'start' });
+        if(tEmail.value){ if(tForm.requestSubmit) tForm.requestSubmit(); else tForm.dispatchEvent(new Event('submit', { cancelable: true })); }
+        else tEmail.focus({ preventScroll: true });
+      };
       if(document.readyState === 'complete') go(); else window.addEventListener('load', go);
     }
   }catch(_){}
