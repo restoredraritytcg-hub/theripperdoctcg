@@ -256,7 +256,7 @@ $('#foot').textContent = C.build;
 const money = n => n == null || isNaN(n) ? '—' : '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const when = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); };
 const thumb = u => /res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(u) ? u.replace('/image/upload/', '/image/upload/f_auto,q_auto,c_fill,w_200,h_266/') : u;
-function toast(m){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 3000); }
+function toast(m, ms){ const t = $('#toast'); t.textContent = m; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, ms || 3000); }
 
 let PIN = ''; try { PIN = sessionStorage.getItem('intake-pin') || localStorage.getItem('intake-pin-keep') || ''; } catch (_) {}
 async function api(body){
@@ -350,7 +350,8 @@ function wireStatus(root){
       const b = e.currentTarget; b.disabled = true; b.textContent = 'Updating…';
       try { const d = await api({ action: 'status', id: O.id, num: it.num, status: sel.value, note: $('[data-stnote]', ctl).value });
         take(d); const y = scrollY; render(); scrollTo(0, y);
-        toast(cap(C.item) + ' ' + it.num + ': ' + d.statusResult.status + (d.statusResult.emailed ? ' — customer emailed' : '')); }
+        const sr = d.statusResult;
+        toast(cap(C.item) + ' ' + it.num + ': ' + sr.status + (sr.emailed ? ' — customer emailed' + (sr.to ? ' (' + sr.to + ')' : '') : sr.reason ? ' — no email sent: ' + sr.reason : ''), sr.failed ? 12000 : sr.emailed ? 4000 : 7000); }
       catch (err) { toast(err.message); b.disabled = false; b.textContent = 'Update status'; }
     };
   });
