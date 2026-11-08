@@ -21,7 +21,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v19',   // shown in the footer — bump on every upload
+  build: 'rd-v20',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -407,9 +407,9 @@ const CONFIG = {
       needContact: 'Please leave an email or phone number so we can reach you.',
       needTerms:   'Please read the Terms &amp; Conditions above and click I AGREE before submitting.',
       uploading:   'Please wait for your photos to finish uploading before submitting.',
-      successEmail:'Submitted {count}! Your reference number is <b>{ref}</b>. A confirmation email is on its way to {email} — please don’t ship your cards until we contact you. You can check progress anytime in Track Your Submission below.',
+      successEmail:'Submitted {count}! Your reference number is <b>{ref}</b>. A confirmation email is on its way to {email} — please don’t ship your cards until we contact you. You can check progress anytime in Track Your Submission below. Don’t see it within a few minutes? Check your spam or junk folder for an email from <b>ripperdoctcg01@gmail.com</b> and mark it “Not spam” so your status updates land in your inbox.',
       successPhone:'Submitted {count}! Your reference number is <b>{ref}</b> — save it. We’ll follow up by phone; please don’t send your cards until we contact you.',
-      successEmailHand:'Submitted {count}! Your reference number is <b>{ref}</b>. A confirmation email is on its way to {email}. We’ll reach out to confirm your hand-off and any delivery costs — please hold onto your cards until then.',
+      successEmailHand:'Submitted {count}! Your reference number is <b>{ref}</b>. A confirmation email is on its way to {email}. We’ll reach out to confirm your hand-off and any delivery costs — please hold onto your cards until then. Don’t see it within a few minutes? Check your spam or junk folder for an email from <b>ripperdoctcg01@gmail.com</b> and mark it “Not spam” so your status updates land in your inbox.',
       successPhoneHand:'Submitted {count}! Your reference number is <b>{ref}</b> — save it. We’ll call to confirm your hand-off and any delivery costs — please hold onto your cards until then.',
       error:       'Something went wrong saving your submission. Please try again, or {fallback}.',
       notConnected:'Submissions aren’t connected yet (no backend endpoint set).',
@@ -688,7 +688,7 @@ const CONFIG = {
 
   track: {
     heading: 'Track your submission',
-    intro: 'Enter the reference number from your confirmation email and the email you submitted with.',
+    intro: 'Enter the reference number from your confirmation email and the email you submitted with. Can’t find our emails? Check your spam or junk folder for messages from ripperdoctcg01@gmail.com.',
     button: 'Track',
     hello: 'Hi {name} — here’s where your {items} are.',
     noteLabel: 'NOTE FROM RIPPERDOC',
@@ -741,7 +741,7 @@ const CONFIG = {
         'Mailing, personal delivery, Uber drop-off, or a local or event hand-off — see <a href="#delivery">Delivery options</a>. Submit the form first; we’ll confirm the method and any delivery costs <b>before</b> you send anything.' ] },
       { q: 'Will restoration improve my grade?', a: ['Results vary by condition. Pre-grading is an opinion, not a guaranteed grade, and grading companies may detect restoration and label or grade a card accordingly. No grade or value increase is guaranteed.'] },
       { q: 'Do you offer bulk pricing?', a: ['Yes — bulk pricing starts at 5–10 cards depending on the service. <a href="#contact">Contact us</a> with your order for a quote.'] },
-      { q: 'How will I know what’s happening?', a: ['You’ll get an email each time a card moves to a new stage, and you can check anytime in Track Your Submission. Add microscope photos + live updates ($5 per card) for close-ups as the work happens.'] }
+      { q: 'How will I know what’s happening?', a: ['You’ll get an email each time a card moves to a new stage, and you can check anytime in Track Your Submission. Our emails come from ripperdoctcg01@gmail.com — if you don’t see them, check your spam or junk folder and mark them “Not spam.” Add microscope photos + live updates ($5 per card) for close-ups as the work happens.'] }
     ]
   },
   contact: {
