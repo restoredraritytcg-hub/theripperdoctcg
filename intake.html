@@ -23,7 +23,7 @@
  * ===================================================================== */
 const CONFIG = {
   business: 'RipperDoc TCG',
-  build: 'rd-intake-v8',
+  build: 'rd-intake-v9',
   endpoint: 'https://script.google.com/macros/s/AKfycbyVCmZmKVUKMUuFVguW8E9Ih6gyRdyQmLM8kDz2QN-s7AfRd6bFGVCzKfdfUPDuiOhG/exec',
   cloudinaryCloud: 'oobgsfee',
   cloudinaryPreset: 'rpbeyooz',
@@ -95,6 +95,16 @@ input:focus, textarea:focus{border-color:var(--accent); outline:none; box-shadow
 .contact{display:grid; gap:2px; font-size:15px; margin-top:6px}
 .panel{background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px}
 .clink{margin-bottom:16px}
+.setbox{border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; margin:0 0 12px; background:var(--panel2)}
+.setbox.need{border-color:var(--warn); background:var(--warn-soft)}
+.setbox > b{font-size:14px}
+.setrow{display:grid; grid-template-columns:2fr 1fr 1fr auto; gap:8px; align-items:end; margin-top:6px}
+.setrow label{display:grid; gap:4px; font-size:13px; color:var(--muted)}
+.setrow input{min-height:40px; padding:8px 10px}
+@media (max-width:640px){.setrow{grid-template-columns:1fr 1fr} .setrow label:first-child{grid-column:1 / -1}}
+.setneed{color:var(--warn); font-weight:800}
+.setline{color:var(--text); font-weight:700}
+.setneed-note{margin:0 0 8px; font-size:14px; color:var(--warn); font-weight:700}
 .clink h2{margin-bottom:4px}
 .clink .clrow{display:flex; gap:8px; margin-top:10px}
 .clink .clrow input{flex:1; min-width:0; font-size:14px}
@@ -427,8 +437,9 @@ function renderOrder(){
       (qt.notes.length ? `<ul class="qnotes">${qt.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '') +
     `</section>` +
     `<section class="panel clist" aria-label="${esc(cap(C.items))}"><h2>${esc(cap(C.items))}</h2>` +
+      (O.items.filter(needsSet).length ? `<p class="setneed-note">${(n => n === 1 ? `1 ${esc(C.item)} still needs a set` : `${n} ${esc(C.items)} still need a set`)(O.items.filter(needsSet).length)} — fill it in on the ${esc(C.item)} below.</p>` : '') +
       O.items.map(it => `<div class="crow"><span><a href="#${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}">${esc(cap(C.item))} ${esc(it.num)}: ${esc(it.name || 'Unnamed')}</a>` +
-        `<span class="sub">${esc(it.service || '')}</span></span>${statusCtl(it)}</div>`).join('') + `</section>` +
+        `<span class="sub">${setLine(it) ? `<b class="setline">${esc(setLine(it))}</b> · ` : '<b class="setneed">Set needed</b> · '}${esc(it.service || '')}</span></span>${statusCtl(it)}</div>`).join('') + `</section>` +
     O.items.map(it => cardHtml(it, false)).join('');
   $('#back').onclick = () => { location.hash = BACKTO; };
   wireCustLink(O);
@@ -443,6 +454,11 @@ function cardHtml(it, single){
   const strip = (kind, list) => `<div class="strip">${list.map(u => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${kind} photo" loading="lazy"></a><button class="x" data-rm="${kind}" data-url="${esc(u)}" aria-label="Remove ${kind} photo">×</button></span>`).join('')}` +
     `<label class="add" data-add="${kind}">Add ${kind} photos<input type="file" accept="image/*,.heic,.heif" multiple hidden></label></div>`;
   return `<section class="panel card" data-num="${esc(it.num)}" aria-label="${esc(cap(C.item))} ${esc(it.num)}"><div class="chead"><h3>${esc(cap(C.item))} ${esc(it.num)}: ${esc(it.name || 'Unnamed')}${single ? '' : `<a class="openlink" href="#${encodeURIComponent(O.id)}/${encodeURIComponent(it.num)}">Open on its own</a>`}</h3>${statusCtl(it)}</div>` +
+    `<div class="setbox${needsSet(it) ? ' need' : ''}"><b>Set${needsSet(it) ? ' <span class="setneed">needed</span>' : ''}</b>` +
+      `<div class="setrow"><label>Set<input type="text" data-ci="set" maxlength="80" value="${esc(it.set || '')}" placeholder="e.g. Base Set"></label>` +
+      `<label>Card #<input type="text" data-ci="cardNo" maxlength="20" value="${esc(it.cardNo || '')}" placeholder="4/102"></label>` +
+      `<label>Year<input type="text" data-ci="year" maxlength="4" inputmode="numeric" value="${esc(it.year || '')}" placeholder="1999"></label>` +
+      `<button class="btn small" data-cisave>Save</button></div></div>` +
     `<dl class="facts"><dt>Service</dt><dd>${esc(it.service || '—')}</dd>${it.value ? `<dt>Declared value</dt><dd>${esc(it.value)}</dd>` : ''}${it.notes ? `<dt>Customer notes</dt><dd>${esc(it.notes)}</dd>` : ''}` +
     `<dt>Quote</dt><dd><b>${/cancel/i.test(it.status) ? 'Not charged' : it.quote == null ? 'Needs a price' : money(it.quote)}</b> <span class="muted">${esc(it.breakdown)}</span></dd></dl>` +
     (cust.length ? `<div class="ph"><b>Customer photos</b><div class="strip">${cust.map(([l, u]) => `<span class="thumb"><a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(thumb(u))}" alt="${esc(l)}" loading="lazy"></a><span>${esc(l)}</span></span>`).join('')}</div></div>` : '') +
@@ -459,8 +475,18 @@ function cardHtml(it, single){
 }
 // repair services with a value surcharge (Code.gs SURCHARGE) get a Value after restoration box
 const needsRv = it => { const S = SURCH || (SITE && SITE.surcharge); return !!(S && (S.services || []).some(n => String(it.service || '').toLowerCase().startsWith(String(n).toLowerCase()))) || !!String(it.restoredValue || '').trim(); };
+// Set / card # / year (Items columns W–Y): blank means nobody picked the card from the list yet.
+const needsSet = it => !String(it.set || '').trim();
+const setLine = it => [it.set, it.cardNo, it.year].map(v => String(v || '').trim()).filter(Boolean).join(' · ');
 function wireCard(it){
   const el = $(`.card[data-num="${CSS.escape(String(it.num))}"]`);
+  const ciSave = $('[data-cisave]', el);
+  if (ciSave) ciSave.onclick = () => {
+    const v = k => $(`[data-ci="${k}"]`, el).value.trim();
+    if (v('year') && !/^\d{4}$/.test(v('year'))) return toast('Year should be 4 digits, like 1999.');
+    save({ action: 'cardInfo', id: O.id, num: it.num, set: v('set'), cardNo: v('cardNo'), year: v('year') }, 'Set saved');
+  };
+  $$('[data-ci]', el).forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') ciSave.click(); }));
   $$('.add', el).forEach(lab => $('input', lab).addEventListener('change', async e => {
     const files = Array.from(e.target.files); e.target.value = ''; if (!files.length) return;
     lab.classList.add('busy'); lab.firstChild.textContent = 'Uploading…';
@@ -908,6 +934,7 @@ async function showNew(key){
     }
     const btn = $('#nsgo');
     guarded(btn, async () => {
+      if (window.CardInfo) for (const [i, el] of $$('.ncard', box).entries()) Object.assign(cards[i], await window.CardInfo($('[data-k="name"]', el)).catch(() => ({})));
       const d = await api({ action: 'newSubmission', customer: { name: f.elements.cname.value, email: f.elements.cemail.value, phone: f.elements.cphone.value, delivery: f.elements.cdel.value, address: f.elements.caddr.value },
         cards, emailCustomer: $('#nsemail').checked, agreed: $('#nsterms').checked });
       ALL = null; LIST = null; take(d); toast(`Submission ${d.created} created`); location.hash = '#' + encodeURIComponent(d.order.id);
@@ -1038,6 +1065,7 @@ route();
   function card(name, setName, num, total, year, rarity, img){
     const n = num ? (total && /^\d+$/.test(num) ? `${num}/${total}` : /^\d+$/.test(num) ? `#${num}` : num) : '';
     return { label: `${name} — ${setName || ''}${n ? ' ' + n : ''}${year ? ` (${year})` : ''}`.trim(), name, sub: [setName, n, year, rarity].filter(Boolean).join(' · '), img,
+      setName: setName || '', cardNo: n, year: year ? String(year) : '',
       num: String(num || '').replace(/^0+/, ''), total: String(total || ''), hay: words(`${name} ${setName || ''}`) };
   }
   async function getJSON(url, ms){
@@ -1149,7 +1177,8 @@ route();
   function pick(i){
     const c = items[i]; if (!c || !input) return;
     input.value = c.label.slice(0, Number(input.maxLength) > 0 ? input.maxLength : 200);
-    input.dataset.clPicked = input.value; close(); clearTimeout(timer); seq++;
+    input.dataset.clPicked = input.value; input.dataset.clCard = JSON.stringify({ set: c.setName, cardNo: c.cardNo, year: c.year });
+    close(); clearTimeout(timer); seq++;
     input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true }));
   }
   // ---- "Look up value" links (PriceCharting + eBay sold), filled from whatever is in the card name field ----
@@ -1170,6 +1199,20 @@ route();
     const t = el.value.trim(); box.hidden = t.length < 3; if (!box.hidden) box.innerHTML = valueLinksHtml(t);
   }
   window.CardValueLinks = valueLinksHtml;   // the owner portal reuses this on each card
+  // Set, card # and year for a card name field: from the suggestion that was picked, or — for a typed name — from the
+  // card list when the text matches exactly one card. Otherwise blank (the owner fills it in on the intake page).
+  window.CardInfo = async function (el) {
+    const blank = { set: '', cardNo: '', year: '' }, text = String(el && el.value || '').trim();
+    if (!text) return blank;
+    if (el.dataset.clPicked === el.value && el.dataset.clCard) { try { return JSON.parse(el.dataset.clCard); } catch (_) {} }
+    try { await loadDB(); } catch (_) { return blank; }
+    if (!DB) return blank;
+    const out = c => ({ set: c.setName, cardNo: c.cardNo, year: c.year });
+    const exact = DB.filter(c => c.label === text); if (exact.length === 1) return out(exact[0]);
+    const r = localSearch(text); if (r.length === 1) return out(r[0]);
+    const k = keyOf(text), same = DB.filter(c => c.nn === k); if (same.length === 1) return out(same[0]);
+    return blank;
+  };
   function attach(el){
     if (el.dataset.cl) return; el.dataset.cl = '1';
     el.setAttribute('autocomplete', 'off'); el.setAttribute('role', 'combobox'); el.setAttribute('aria-autocomplete', 'list');
