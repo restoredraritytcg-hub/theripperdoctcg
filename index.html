@@ -3,6 +3,25 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RipperDoc TCG — Trading Card Cleaning, Repair &amp; Restoration</title>
+<meta name="description" content="RipperDoc TCG restores, protects and preserves trading cards: card refresh cleaning, minor repair, full restoration, slab services and grading prep. Free photo assessments, choose your turnaround, track every card online.">
+<link rel="canonical" href="https://theripperdoctcg.com/">
+<link rel="icon" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="RipperDoc TCG">
+<meta property="og:url" content="https://theripperdoctcg.com/">
+<meta property="og:title" content="RipperDoc TCG — Trading Card Cleaning, Repair &amp; Restoration">
+<meta property="og:description" content="RipperDoc TCG restores, protects and preserves trading cards: card refresh cleaning, minor repair, full restoration, slab services and grading prep. Free photo assessments, choose your turnaround, track every card online.">
+<meta property="og:image" content="https://theripperdoctcg.com/ripperdoc-email-logo.png">
+<meta property="og:image:width" content="440">
+<meta property="og:image:height" content="207">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="RipperDoc TCG — Trading Card Cleaning, Repair &amp; Restoration">
+<meta name="twitter:description" content="RipperDoc TCG restores, protects and preserves trading cards: card refresh cleaning, minor repair, full restoration, slab services and grading prep. Free photo assessments, choose your turnaround, track every card online.">
+<meta name="twitter:image" content="https://theripperdoctcg.com/ripperdoc-email-logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script>
 /* =====================================================================
  *  RIPPERDOC TCG — built on the Service Business Website template
@@ -21,7 +40,7 @@
  * ===================================================================== */
 const CONFIG = {
 
-  build: 'rd-v22',   // shown in the footer — bump on every upload
+  build: 'rd-v23',   // shown in the footer — bump on every upload
 
   /* ─── Backend + photo uploads ───────────────────────────────────── */
   backend: {
@@ -789,12 +808,21 @@ const CONFIG = {
   ['https://fonts.googleapis.com', 'https://fonts.gstatic.com'].forEach((u, i) => {
     const l = document.createElement('link'); l.rel = 'preconnect'; l.href = u; if(i) l.crossOrigin = ''; document.head.appendChild(l);
   });
-  const fl = document.createElement('link'); fl.rel = 'stylesheet'; fl.href = href; document.head.appendChild(fl);
+  const fl = document.createElement('link'); fl.rel = 'stylesheet'; fl.href = href; fl.media = 'print'; fl.onload = function(){ this.media = 'all'; }; document.head.appendChild(fl);
 
   const w = CONFIG.words, cap = s => s.charAt(0).toUpperCase() + s.slice(1);
   const fill = s => String(s || '').replace(/\{item\}/g, w.item).replace(/\{items\}/g, w.items).replace(/\{business\}/g, CONFIG.brand.name);
   document.title = fill(CONFIG.meta.title).replace(/&amp;/g, '&');
-  const md = document.createElement('meta'); md.name = 'description'; md.content = fill(CONFIG.meta.description); document.head.appendChild(md);
+  const descText = fill(CONFIG.meta.description);
+  let md = document.querySelector('meta[name="description"]');
+  if(!md){ md = document.createElement('meta'); md.name = 'description'; document.head.appendChild(md); }
+  md.content = descText;
+  [['meta[property="og:title"]','content', document.title],
+   ['meta[property="og:description"]','content', descText],
+   ['meta[name="twitter:title"]','content', document.title],
+   ['meta[name="twitter:description"]','content', descText]].forEach(([sel, attrName, val]) => {
+     const el = document.querySelector(sel); if(el) el.setAttribute(attrName, val);
+   });
   let fav = CONFIG.brand.favicon;
   if(!fav){
     const letter = (CONFIG.brand.name.trim()[0] || '?').toUpperCase();
@@ -1622,7 +1650,7 @@ const CONFIG = {
 
   footer{padding:40px 20px 30px; text-align:center;}
   footer .fname{font-size:11px; color:var(--muted); letter-spacing:0.05em;}
-  footer .fyear{font-size:11px; color:var(--muted); margin-top:6px;}
+  footer .fyear{font-size:11px; color:var(--muted); margin-top:6px;}footer .flegal{font-size:11px;color:var(--muted);margin-top:10px;}footer .flegal a{color:inherit;}
 
   @media (min-width:600px){
     .hero-ctas{flex-wrap:nowrap;}
@@ -2204,6 +2232,7 @@ const CONFIG = {
   <footer>
     <div class="footer-name pixel" id="footer-name"></div>
     <div class="fyear">© <span id="year"></span> · <span id="footer-summary"></span> <span style="opacity:.55;">· build <span id="footer-build"></span></span></div>
+    <div class="flegal"><a href="/privacy/">Privacy</a> · Built by <a href="https://10pointstudios.com/?utm_source=theripperdoctcg&amp;utm_medium=referral&amp;utm_campaign=footer_credit" target="_blank" rel="noopener">10Point Studios</a></div>
   </footer>
 </div>
 
@@ -2214,6 +2243,44 @@ function __engine(){
  * ===================================================================== */
 const C = CONFIG, WD = C.words;
 const $ = id => document.getElementById(id);
+
+function isCloudinary(url){
+  return typeof url === 'string' && /res\.cloudinary\.com\/[^/]+\/image\/upload\//.test(url);
+}
+function cldUrl(url, w){
+  if(!isCloudinary(url) || !w) return url;
+  return url.replace(/(\/image\/upload\/)(.*)$/, (_, prefix, rest) => {
+    const segs = rest.split('/');
+    let transforms = '';
+    let path = rest;
+    if(segs[0] && !/^v\d+$/.test(segs[0]) && segs[0].indexOf('.') === -1){
+      transforms = segs[0];
+      path = segs.slice(1).join('/');
+    }
+    const keep = transforms.split(',').filter(Boolean).filter(t => !/^(f_auto|q_auto|c_limit|w_\d+)$/.test(t));
+    return prefix + ['f_auto','q_auto','c_limit','w_' + w].concat(keep).join(',') + '/' + path;
+  });
+}
+function cldSrcset(url){
+  if(!isCloudinary(url)) return '';
+  return [400, 800, 1200].map(w => cldUrl(url, w) + ' ' + w + 'w').join(', ');
+}
+function imgAttrs(url, opts){
+  opts = opts || {};
+  const lazy = opts.lazy !== false;
+  const sizes = opts.sizes || '(max-width: 700px) 100vw, 800px';
+  const src = isCloudinary(url) ? cldUrl(url, opts.w || 800) : url;
+  let a = 'src="' + attr(src) + '"';
+  const ss = cldSrcset(url);
+  if(ss) a += ' srcset="' + attr(ss) + '" sizes="' + attr(sizes) + '"';
+  if(lazy) a += ' loading="lazy" decoding="async"';
+  else {
+    a += ' decoding="async"';
+    if(opts.priority) a += ' fetchpriority="high"';
+  }
+  return a;
+}
+
 const cap = s => { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); };
 function T(s){
   return String(s == null ? '' : s)
@@ -2320,8 +2387,8 @@ function priceCardsHtml(tiers){
     const sub = tierSub(t);
     return `<article class="price-card${t.featured ? ' featured' : ''}${t.image ? ' has-img' : ''}${t.speeds ? ' has-speeds' : ''}${t.color ? ' c-' + t.color : ''}">` +
       (t.featured ? `<div class="pc-flag">${T(t.featured === true ? 'Featured' : t.featured)}</div>` : '') +
-      (t.image ? `<img class="pc-img" src="${attr(t.image)}" alt="" loading="lazy">` : '') +
-      (t.icon ? `<img class="pc-icon" src="${attr(t.icon)}" alt="" loading="lazy">` : '') +
+      (t.image ? `<img class="pc-img" ${imgAttrs(t.image)} alt="">` : '') +
+      (t.icon ? `<img class="pc-icon" ${imgAttrs(t.icon, { sizes:"80px" })} alt="">` : '') +
       (t.kicker ? `<div class="pc-kicker">${T(t.kicker)}</div>` : '') +
       `<h3>${t.title}</h3>${tierPriceHtml(t)}` +
       (t.desc ? `<p class="pc-desc">${T(t.desc)}</p>` : '') +
@@ -2350,8 +2417,8 @@ const SECTIONS = {
     const h = C.hero;
     const L = h.lockup;
     return `<section class="hero${h.image || L ? '' : ' no-image'}${h.stack ? ' hero-stack' : ''}">` +
-      (L ? `<div class="hero-lockup">${L.emblem ? `<img class="hl-emblem" src="${attr(L.emblem)}" alt="">` : ''}<div class="hl-word" role="img" aria-label="${attr(plain(T(L.alt || (L.line1 + ' ' + L.line2))))}"><span class="hl-1">${T(L.line1)}</span>${L.line2 ? `<span class="hl-rule"><i></i><b>${T(L.line2)}</b><i></i></span>` : ''}${L.by ? `<span class="hl-by">${T(L.by)}</span>` : ''}</div></div>`
-         : h.image ? `<div class="hero-frame${h.imageMaxWidth ? ' boxed' : ''}"><img src="${attr(h.image)}" alt="${attr(T(h.imageAlt))}"></div>` : '') +
+      (L ? `<div class="hero-lockup">${L.emblem ? `<img class="hl-emblem" ${imgAttrs(L.emblem, { lazy:false, sizes:"160px" })} alt="">` : ''}<div class="hl-word" role="img" aria-label="${attr(plain(T(L.alt || (L.line1 + ' ' + L.line2))))}"><span class="hl-1">${T(L.line1)}</span>${L.line2 ? `<span class="hl-rule"><i></i><b>${T(L.line2)}</b><i></i></span>` : ''}${L.by ? `<span class="hl-by">${T(L.by)}</span>` : ''}</div></div>`
+         : h.image ? `<div class="hero-frame${h.imageMaxWidth ? ' boxed' : ''}"><img ${imgAttrs(h.image, { lazy:false, priority:true, sizes:"100vw" })} alt="${attr(T(h.imageAlt))}"></div>` : '') +
       `<div class="hero-text wrap"><div class="tagline"><div class="hero-headline pixel">${T(h.headline)}</div>` +
       `<p class="intro-text">${T(h.sub)}</p></div><div class="hero-ctas">` +
       (h.ctas || []).map(b => `<a href="${attr(b.href)}" class="btn btn-${b.style === 'outline' ? 'outline' : 'primary'}">${T(b.label)}</a>`).join('') +
@@ -2379,7 +2446,7 @@ const SECTIONS = {
   about(){
     const a = C.about;
     return `<section id="about" class="wrap">${head(a.heading)}` +
-      (a.image ? `<img class="about-image" src="${attr(a.image)}" alt="${attr(T(a.imageAlt))}" loading="lazy">` : '') + `<div class="about-copy">` +
+      (a.image ? `<img class="about-image" ${imgAttrs(a.image)} alt="${attr(T(a.imageAlt))}">` : '') + `<div class="about-copy">` +
       a.paragraphs.map(p => typeof p === 'string' ? `<p>${T(p)}</p>` : p.h ? `<h3 class="about-sub">${T(p.h)}</h3>` : p.lead ? `<p class="about-lead">${T(p.lead)}</p>` : p.steps ? `<ol class="about-steps">${p.steps.map((x, i) => `<li><span>${String(i + 1).padStart(2, '0')}</span>${T(x)}</li>`).join('')}</ol>` : '').join('') + (a.closing ? `<p class="closing">${T(a.closing)}</p>` : '') + `</div></section>`;
   },
   gallery(){
@@ -2387,7 +2454,7 @@ const SECTIONS = {
     if(g.mode === 'reel'){
       const one = g.items.map((it, i) =>
         `<figure class="reel-card" style="--t:${i % 2 ? 2.2 : -2.2}deg; --dy:${i % 2 ? 10 : 0}px;">` +
-        `<span class="fan-img">${it.image ? `<img src="${attr(it.image)}" alt="${attr(plain(T(it.alt || it.title)))}" loading="lazy">` : `<span class="img-placeholder">${T(g.placeholder || 'Card photo')}</span>`}</span>` +
+        `<span class="fan-img">${it.image ? `<img ${imgAttrs(it.image, { sizes:"(max-width: 700px) 100vw, 50vw" })} alt="${attr(plain(T(it.alt || it.title)))}">` : `<span class="img-placeholder">${T(g.placeholder || 'Card photo')}</span>`}</span>` +
         `<figcaption><b>${T(it.title)}</b>${it.set ? `<span>${T(it.set)}</span>` : ''}${it.tag ? `<em>${T(it.tag)}</em>` : ''}</figcaption></figure>`).join('');
       return `<section id="gallery" class="wrap">${head(g.heading, g.intro)}` +
         `<div class="reel" data-speed="${g.speed || 40}" aria-label="${attr(plain(T(g.heading)))}"><div class="reel-track"><div class="reel-set">${one}</div></div></div>` +
@@ -2398,7 +2465,7 @@ const SECTIONS = {
       const cards = g.items.map((it, i) => {
         const o = i - mid, x = o * spread, y = Math.abs(o) * Math.abs(o) * 9, r = o * tilt;
         return `<figure class="fan-card" data-i="${i}" style="--x:${x}px; --y:${y}px; --r:${r}deg; --z:${n - Math.round(Math.abs(o) * 2)};" tabindex="0">` +
-          `<span class="fan-img">${it.image ? `<img src="${attr(it.image)}" alt="${attr(plain(T(it.alt || it.title)))}" loading="lazy">` : `<span class="img-placeholder">${T(g.placeholder || 'Card photo')}</span>`}</span>` +
+          `<span class="fan-img">${it.image ? `<img ${imgAttrs(it.image, { sizes:"(max-width: 700px) 100vw, 50vw" })} alt="${attr(plain(T(it.alt || it.title)))}">` : `<span class="img-placeholder">${T(g.placeholder || 'Card photo')}</span>`}</span>` +
           `<figcaption><b>${T(it.title)}</b>${it.set ? `<span>${T(it.set)}</span>` : ''}${it.tag ? `<em>${T(it.tag)}</em>` : ''}</figcaption></figure>`;
       }).join('');
       const roster = g.items.map((it, i) => `<li data-i="${i}"><b>${T(it.title)}</b>${it.set ? `<span>${T(it.set)}</span>` : ''}${it.tag ? `<em>${T(it.tag)}</em>` : ''}</li>`).join('');
@@ -2407,11 +2474,11 @@ const SECTIONS = {
     }
     if(g.mode === 'showcase'){
       return `<section id="gallery" class="wrap">${head(g.heading, g.intro)}<div class="showcase-grid">` + g.items.map(it =>
-        `<figure class="showcase-card">${it.image ? `<img src="${attr(it.image)}" alt="${attr(T(it.alt || it.title))}" loading="lazy">` : `<div class="img-placeholder">${T(g.placeholder || 'Photo')}</div>`}` +
+        `<figure class="showcase-card">${it.image ? `<img ${imgAttrs(it.image, { sizes:"(max-width: 700px) 100vw, 50vw" })} alt="${attr(T(it.alt || it.title))}">` : `<div class="img-placeholder">${T(g.placeholder || 'Photo')}</div>`}` +
         `<figcaption>${it.tag ? `<span class="sc-tag">${T(it.tag)}</span>` : ''}<span class="sc-title">${T(it.title)}</span>${it.caption ? `<span class="sc-cap">${T(it.caption)}</span>` : ''}</figcaption></figure>`
       ).join('') + `</div>${g.note ? `<p class="gallery-note">${T(g.note)}</p>` : ''}</section>`;
     }
-    const fig = (src, alt, label) => `<figure>${src ? `<img src="${attr(src)}" alt="${attr(T(alt))}" loading="lazy">` : `<div class="img-placeholder">${T(label)} photo</div>`}<figcaption>${T(label)}</figcaption></figure>`;
+    const fig = (src, alt, label) => `<figure>${src ? `<img ${imgAttrs(src, { sizes:"(max-width: 700px) 100vw, 50vw" })} alt="${attr(T(alt))}">` : `<div class="img-placeholder">${T(label)} photo</div>`}<figcaption>${T(label)}</figcaption></figure>`;
     return `<section id="gallery" class="wrap">${head(g.heading, g.intro)}` + g.items.map(it =>
       `<details class="gallery-card"><summary>${T(it.title)}</summary><div class="gallery-pair">` +
       fig(it.before, it.beforeAlt, g.beforeLabel) + fig(it.after, it.afterAlt, g.afterLabel) + `</div>` +
@@ -2580,8 +2647,8 @@ function blockHtml(k, b){
   const cols = b.columns || Math.min(b.items.length, 4);
   return `<section id="${k}" class="wrap block blk-${b.style || 'cards'}">${head(b.heading, b.intro)}<div class="blk-grid" style="--cols:${cols}">` +
     b.items.map(it => `<article class="blk-item${it.color ? ' c-' + it.color : ''}">` +
-      (it.icon ? `<img class="blk-icon" src="${attr(it.icon)}" alt="" loading="lazy">` : '') +
-      (it.image ? `<img class="blk-img" src="${attr(it.image)}" alt="" loading="lazy">` : '') +
+      (it.icon ? `<img class="blk-icon" ${imgAttrs(it.icon, { sizes:"80px" })} alt="">` : '') +
+      (it.image ? `<img class="blk-img" ${imgAttrs(it.image)} alt="">` : '') +
       `<div class="blk-body"><h3>${T(it.title)}</h3>${it.text ? `<p>${T(it.text)}</p>` : ''}` +
       (it.list ? `<ul class="blk-list">${it.list.map(x => `<li>${T(x)}</li>`).join('')}</ul>` : '') + `</div></article>`).join('') +
     `</div>${b.footnote ? `<p class="blk-foot">${T(b.footnote)}</p>` : ''}</section>`;
@@ -2596,7 +2663,7 @@ function dexPane(t){
 function dexHtml(key){
   const d = C.dex, tabs = d.tabs || [];
   return `<section id="${key}" class="wrap">${head(d.heading, d.intro)}<div class="dex">` +
-    `<div class="dex-top"><div class="dex-box dex-portrait">${d.number ? `<span class="dex-no">${T(d.number)}</span>` : ''}<img src="${attr(d.image)}" alt="${attr(plain(T(d.imageAlt || d.name)))}" loading="lazy"></div>` +
+    `<div class="dex-top"><div class="dex-box dex-portrait">${d.number ? `<span class="dex-no">${T(d.number)}</span>` : ''}<img ${imgAttrs(d.image)} alt="${attr(plain(T(d.imageAlt || d.name)))}"></div>` +
     `<div class="dex-box dex-stats"><div class="dex-name">${T(d.name)}</div>${d.title ? `<div class="dex-title">${T(d.title)}</div>` : ''}<hr>` +
     ((d.types || []).length ? `<div class="dex-row"><span>TYPE</span><span class="dex-types">${d.types.map(t => `<b class="dex-type c-${t.color || 'blue'}">${T(t.label)}</b>`).join('')}</span></div>` : '') +
     (d.stats || []).map(st => `<div class="dex-row"><span>${T(st[0])}</span><span>${T(st[1])}</span></div>`).join('') +

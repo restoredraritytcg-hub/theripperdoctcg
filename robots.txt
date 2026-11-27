@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /intake.html
+Disallow: /help.html
+Disallow: /scan/
+Sitemap: https://theripperdoctcg.com/sitemap.xml
